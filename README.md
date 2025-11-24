@@ -78,7 +78,7 @@ edu_cloud/
 
 1. **克隆项目**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/87361/Edu_Cloud.git
    cd edu_cloud
    ```
 
@@ -207,8 +207,8 @@ def get_example(db: Session = Depends(get_db)):
 ## 📞 联系方式
 
 如有问题或建议，请通过以下方式联系：
-- 项目Issues: [GitHub Issues](https://github.com/your-repo/issues)
-- 邮箱: your-email@example.com
+- 项目Issues: [GitHub Issues](https://github.com/87361/Edu_Cloud/issues)
+- 邮箱: 1316757358@qq.com
 
 ---
 
