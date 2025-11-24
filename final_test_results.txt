@@ -1,0 +1,150 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-9.0.1, pluggy-1.6.0 -- /home/yly/Downloads/classworks/edu_cloud/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yly/Downloads/classworks/edu_cloud
+configfile: pyproject.toml
+collecting ... collected 35 items
+
+src/edu_cloud/user/tests.py::TestUserAPI::test_register_success PASSED   [  2%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_register_duplicate_username PASSED [  5%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_register_invalid_data PASSED [  8%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_login_success PASSED      [ 11%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_login_invalid_credentials PASSED [ 14%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_login_inactive_user PASSED [ 17%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_get_user_info_success PASSED [ 20%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_get_user_info_invalid_token PASSED [ 22%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_get_user_info_no_token PASSED [ 25%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_update_user_info_success PASSED [ 28%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_change_password_success PASSED [ 31%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_change_password_wrong_current PASSED [ 34%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_logout_success PASSED     [ 37%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_get_users_list_success PASSED [ 40%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_delete_user_success PASSED [ 42%]
+src/edu_cloud/user/tests.py::TestUserAPI::test_error_response_format PASSED [ 45%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_multiple_user_registration PASSED [ 48%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_user_isolation PASSED [ 51%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_concurrent_user_operations PASSED [ 54%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_registration_with_extreme_values PASSED [ 57%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_password_strength_validation PASSED [ 60%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_email_validation_edge_cases PASSED [ 62%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_token_expiration PASSED [ 65%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_database_connection_failure PASSED [ 68%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_sql_injection_attempts PASSED [ 71%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_xss_prevention FAILED [ 74%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_large_user_list_performance PASSED [ 77%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_complete_user_lifecycle PASSED [ 80%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_oauth2_token_endpoint PASSED [ 82%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_patch_vs_put_semantics PASSED [ 85%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_malformed_json_requests FAILED [ 88%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_empty_request_body FAILED [ 91%]
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_unsupported_http_methods PASSED [ 94%]
+src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_username_constraint PASSED [ 97%]
+src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_username_constraint ERROR [ 97%]
+src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_email_constraint PASSED [100%]
+src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_email_constraint ERROR [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at teardown of TestDatabaseConstraints.test_unique_username_constraint _
+src/edu_cloud/user/comprehensive_tests.py:602: in teardown_method
+    self.db_session.query(User).delete()
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/query.py:3210: in delete
+    self.session.execute(
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2351: in execute
+    return self._execute_internal(
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2239: in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2108: in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in _connection_for_bind
+    ???
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py:101: in _go
+    self._raise_for_prerequisite_state(fn.__name__, current_state)
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:971: in _raise_for_prerequisite_state
+    raise sa_exc.PendingRollbackError(
+E   sqlalchemy.exc.PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: (sqlite3.IntegrityError) UNIQUE constraint failed: users.username
+E   [SQL: INSERT INTO users (username, email, full_name, hashed_password, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)]
+E   [parameters: ('duplicate_user', 'user2@example.com', None, '$2b$12$UimR35CpogANNhtmIPopkOP14ECz7GRzZnTDLAVmfTm4/joepDLq6', 1, '2025-11-24 16:58:52.650466')]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj) (Background on this error at: https://sqlalche.me/e/20/7s2a)
+__ ERROR at teardown of TestDatabaseConstraints.test_unique_email_constraint ___
+src/edu_cloud/user/comprehensive_tests.py:602: in teardown_method
+    self.db_session.query(User).delete()
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/query.py:3210: in delete
+    self.session.execute(
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2351: in execute
+    return self._execute_internal(
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2239: in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:2108: in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<string>:2: in _connection_for_bind
+    ???
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py:101: in _go
+    self._raise_for_prerequisite_state(fn.__name__, current_state)
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py:971: in _raise_for_prerequisite_state
+    raise sa_exc.PendingRollbackError(
+E   sqlalchemy.exc.PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: (sqlite3.IntegrityError) UNIQUE constraint failed: users.email
+E   [SQL: INSERT INTO users (username, email, full_name, hashed_password, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)]
+E   [parameters: ('user2', 'duplicate@example.com', None, '$2b$12$8OsWg8B8CzfIqzF6RdghF.68rYI8wUoKr3O9AJ90ozILMPIdQ9eO.', 1, '2025-11-24 16:58:52.977992')]
+E   (Background on this error at: https://sqlalche.me/e/20/gkpj) (Background on this error at: https://sqlalche.me/e/20/7s2a)
+=================================== FAILURES ===================================
+_________________ TestUserAPIComprehensive.test_xss_prevention _________________
+src/edu_cloud/user/comprehensive_tests.py:373: in test_xss_prevention
+    user_data = json.loads(response.data)['data']
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'data'
+____________ TestUserAPIComprehensive.test_malformed_json_requests _____________
+src/edu_cloud/user/comprehensive_tests.py:546: in test_malformed_json_requests
+    assert response.status_code in [400, 422]
+E   assert 500 in [400, 422]
+E    +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+_______________ TestUserAPIComprehensive.test_empty_request_body _______________
+src/edu_cloud/user/comprehensive_tests.py:565: in test_empty_request_body
+    assert response.status_code in [400, 422]
+E   assert 500 in [400, 422]
+E    +  where 500 = <WrapperTestResponse streamed [500 INTERNAL SERVER ERROR]>.status_code
+=============================== warnings summary ===============================
+src/edu_cloud/common/database.py:12
+  /home/yly/Downloads/classworks/edu_cloud/src/edu_cloud/common/database.py:12: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854
+  /home/yly/Downloads/classworks/edu_cloud/.venv/lib/python3.12/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+src/edu_cloud/user/schemas.py:20
+  /home/yly/Downloads/classworks/edu_cloud/src/edu_cloud/user/schemas.py:20: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class User(BaseModel):
+
+src/edu_cloud/user/schemas.py:31
+  /home/yly/Downloads/classworks/edu_cloud/src/edu_cloud/user/schemas.py:31: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class UserResponse(BaseModel):
+
+src/edu_cloud/user/tests.py: 18 warnings
+src/edu_cloud/user/comprehensive_tests.py: 136 warnings
+  /home/yly/Downloads/classworks/edu_cloud/.venv/lib/python3.12/site-packages/sqlalchemy/sql/schema.py:3624: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+
+src/edu_cloud/user/tests.py::TestUserAPI::test_update_user_info_success
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_user_isolation
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_user_isolation
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_complete_user_lifecycle
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_patch_vs_put_semantics
+  /home/yly/Downloads/classworks/edu_cloud/src/edu_cloud/user/api.py:225: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    update_dict = update_data.dict(exclude_unset=True)
+
+src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_patch_vs_put_semantics
+  /home/yly/Downloads/classworks/edu_cloud/src/edu_cloud/user/api.py:359: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    update_dict = update_data.dict(exclude_unset=True)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_xss_prevention
+FAILED src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_malformed_json_requests
+FAILED src/edu_cloud/user/comprehensive_tests.py::TestUserAPIComprehensive::test_empty_request_body
+ERROR src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_username_constraint
+ERROR src/edu_cloud/user/comprehensive_tests.py::TestDatabaseConstraints::test_unique_email_constraint
+============ 3 failed, 32 passed, 164 warnings, 2 errors in 32.71s =============
