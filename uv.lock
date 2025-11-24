@@ -115,16 +115,16 @@ wheels = [
 
 [[package]]
 name = "buptmw"
-version = "0.1.3"
+version = "0.1.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "lxml" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/fc/cfc9123532aaea590279c66a4c7af47a45046e9af2224ca3964f5e3ab56b/buptmw-0.1.3.tar.gz", hash = "sha256:bf5d7d50caa12b01ac403f9a4510a02b583e06ea2f17bc5ffdc1848dde512a30", size = 19290, upload-time = "2025-10-27T16:36:21.453Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/02/78/a07afb96fc11b4b8634f1e3e1290fed1647a9e01fc4fe12dea61c9913077/buptmw-0.1.4.tar.gz", hash = "sha256:a13fdd44d355c51d373f789ee35bee38572c1847f047a50fd041e7bdeeaa1dd0", size = 19478, upload-time = "2025-11-24T14:42:23.345Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bb/66/ca66629d2380ac0f66082b97f69403d0bb08ea7dab3b7d13b5106fa1988e/buptmw-0.1.3-py3-none-any.whl", hash = "sha256:2b9e118eb0fadd6cd2f3d8e19aca1d6aac689fabb9e306c6a9d1155fea670731", size = 19386, upload-time = "2025-10-27T16:36:19.859Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/ef/a715d105877e4bb7c04b79a7f8dff0763d8f9962313e1aaff41ea2a61668/buptmw-0.1.4-py3-none-any.whl", hash = "sha256:c38c85f45bddb23267a4caa208f3005ea776d0099bc5e67b4f901c31263e5869", size = 19218, upload-time = "2025-11-24T14:42:21.564Z" },
 ]
 
 [[package]]
@@ -230,7 +230,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "buptmw", specifier = ">=0.1.3" },
+    { name = "buptmw", specifier = ">=0.1.4" },
     { name = "fastapi", specifier = ">=0.121.3" },
     { name = "passlib", extras = ["bcrypt"], specifier = ">=1.7.4" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
