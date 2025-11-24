@@ -23,7 +23,7 @@
 
 ### 后端技术
 - **语言**: Python 3.12+
-- **框架**: Flask (轻量级Web框架，灵活扩展)
+- **框架**: Flask
 - **数据库**: SQLAlchemy ORM
 - **依赖管理**: pyproject.toml + uv
 - **认证**: JWT令牌认证
