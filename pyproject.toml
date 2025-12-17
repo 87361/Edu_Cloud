@@ -18,6 +18,8 @@ dependencies = [
     "email-validator>=2.0.0",
     "gunicorn>=21.0.0",
     "pytest>=9.0.1",
+    "pywebio>=1.8.0",
+    "requests>=2.31.0",
 ]
 
 [tool.setuptools.packages.find]
