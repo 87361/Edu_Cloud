@@ -42,7 +42,11 @@ def create_app():
          })
     
     # 注册蓝图
-    app.register_blueprint(user_bp, url_prefix='/api/user')
+    app.register_blueprint(user_bp, url_prefix='/api/user') 
+    
+    from src.edu_cloud.assignment.api import assignment_bp
+    # 注册assignment
+    app.register_blueprint(assignment_bp, url_prefix='/api/assignment')
     
     # 根路径
     @app.route('/')
