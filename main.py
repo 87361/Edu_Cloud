@@ -6,8 +6,11 @@ import logging
 from werkzeug.exceptions import HTTPException
 
 from src.edu_cloud.common.config import settings
-from src.edu_cloud.common.database import engine, Base
+from src.edu_cloud.common.database import engine, Base, SessionLocal
+from src.edu_cloud.common.token_manager import is_token_revoked
 from src.edu_cloud.user.api import user_bp
+# 导入模型以确保表被创建
+from src.edu_cloud.user import models  # 这会导入User和TokenBlacklist模型
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -29,15 +32,36 @@ def create_app():
     # 初始化JWT
     jwt = JWTManager(app)
     
-    # 配置CORS - 更灵活的配置
+    # Token黑名单检查回调
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        """
+        检查token是否已被撤销
+        这个回调函数会在每次验证token时被调用
+        """
+        jti = jwt_payload.get("jti")
+        if not jti:
+            return True  # 如果没有JTI，认为token无效
+        
+        db = SessionLocal()
+        try:
+            return is_token_revoked(db, jti)
+        except Exception as e:
+            logger.error(f"Error checking token revocation: {str(e)}")
+            return True  # 发生错误时，为了安全起见，认为token已被撤销
+        finally:
+            db.close()
+    
+    # 配置CORS - 支持环境变量配置
+    cors_origins = settings.cors_origins.split(",") if "," in settings.cors_origins else [settings.cors_origins]
     CORS(app, 
          resources={
              r"/api/*": {
-                 "origins": ["*"],  # 在生产环境中应该限制具体域名
-                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "origins": cors_origins,  # 从配置读取，生产环境应限制具体域名
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
                  "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
                  "expose_headers": ["X-Total-Count"],
-                 "supports_credentials": True
+                 "supports_credentials": settings.cors_supports_credentials
              }
          })
     
@@ -47,6 +71,10 @@ def create_app():
     from src.edu_cloud.assignment.api import assignment_bp
     # 注册assignment
     app.register_blueprint(assignment_bp, url_prefix='/api/assignment')
+    
+    from src.edu_cloud.admin.api import admin_bp
+    # 注册管理员API
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
     
     # 根路径
     @app.route('/')
@@ -162,4 +190,8 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(
+        host=settings.host,
+        port=settings.port,
+        debug=settings.debug
+    )

@@ -11,6 +11,7 @@ from ..common.database import get_db, SessionLocal
 from ..common.security import verify_password, get_password_hash
 from ..common.auth import create_user_access_token
 from ..common.cas_auth import verify_cas_credentials, encrypt_cas_password
+from ..common.token_manager import revoke_current_token
 from . import models, schemas
 from datetime import timezone
 
@@ -38,6 +39,7 @@ def success_response(data: Any) -> Dict[str, Any]:
             'email': data.email,
             'full_name': data.full_name,
             'is_active': data.is_active,
+            'role': getattr(data, 'role', 'user'),  # 支持角色字段
             'created_at': data.created_at.isoformat() if data.created_at else None,
             # CAS 相关信息（不包含密码）
             'cas_username': data.cas_username if hasattr(data, 'cas_username') else None,
@@ -627,17 +629,28 @@ def delete_user_me():
 @user_bp.route("/logout", methods=["POST"])
 @jwt_required()
 def logout():
-    """用户登出（客户端需要删除token）"""
+    """用户登出，将当前token加入黑名单"""
     try:
-        # 在服务器端，我们主要返回成功响应
-        # 实际的登出需要客户端删除存储的token
-        return jsonify({
-            "message": "Successfully logged out",
-            "instruction": "Please delete the access token from client storage"
-        })
+        db = SessionLocal()
+        try:
+            # 撤销当前token
+            success = revoke_current_token(db)
+            
+            if success:
+                return jsonify({
+                    "message": "Successfully logged out",
+                    "instruction": "Token has been revoked. Please delete the access token from client storage."
+                })
+            else:
+                logger.warning("Failed to revoke token during logout")
+                return error_response("Logout failed: could not revoke token", 500)
+                
+        finally:
+            db.close()
+            
     except Exception as e:
         logger.error(f"Logout error: {str(e)}")
-        return error_response("Logout failed", 500)
+        return error_response(f"Logout failed: {str(e)}", 500)
 
 @user_bp.route("/me", methods=["PATCH"])
 @jwt_required()

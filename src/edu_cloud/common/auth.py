@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from flask import jsonify
+from functools import wraps
 from flask_jwt_extended import (
     JWTManager, create_access_token, get_jwt_identity, jwt_required, get_jwt
 )
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session
 from werkzeug.exceptions import HTTPException
 
 from .config import settings
-from .database import get_db
+from .database import get_db, SessionLocal
 from ..user.models import User
 
 class FlaskAuthError(HTTPException):
@@ -101,3 +102,39 @@ def verify_token(token: str) -> Optional[str]:
         return payload.get('sub')
     except Exception:
         return None
+
+
+def admin_required(f):
+    """
+    管理员权限检查装饰器
+    需要用户已登录且角色为admin
+    """
+    @wraps(f)
+    @jwt_required()
+    def decorated_function(*args, **kwargs):
+        current_username = get_jwt_identity()
+        if not current_username:
+            return jsonify({"error": "Could not validate credentials"}), 401
+        
+        db = SessionLocal()
+        try:
+            user = db.query(User).filter(User.username == current_username).first()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            
+            if not user.is_active:
+                return jsonify({"error": "Inactive user"}), 400
+            
+            if not user.is_admin():
+                return jsonify({
+                    "error": "Forbidden",
+                    "message": "Admin access required"
+                }), 403
+            
+            # 将用户添加到kwargs中
+            kwargs['current_user'] = user
+            return f(*args, **kwargs)
+        finally:
+            db.close()
+    
+    return decorated_function
