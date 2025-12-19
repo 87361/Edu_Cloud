@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy.orm import Session
@@ -10,7 +10,9 @@ import json
 from ..common.database import get_db, SessionLocal
 from ..common.security import verify_password, get_password_hash
 from ..common.auth import create_user_access_token
+from ..common.cas_auth import verify_cas_credentials, encrypt_cas_password
 from . import models, schemas
+from datetime import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,11 @@ def success_response(data: Any) -> Dict[str, Any]:
             'email': data.email,
             'full_name': data.full_name,
             'is_active': data.is_active,
-            'created_at': data.created_at.isoformat() if data.created_at else None
+            'created_at': data.created_at.isoformat() if data.created_at else None,
+            # CAS 相关信息（不包含密码）
+            'cas_username': data.cas_username if hasattr(data, 'cas_username') else None,
+            'cas_is_bound': data.cas_is_bound if hasattr(data, 'cas_is_bound') else False,
+            'cas_bound_at': data.cas_bound_at.isoformat() if hasattr(data, 'cas_bound_at') and data.cas_bound_at else None
         }
     return {"data": data}
 
@@ -148,6 +154,168 @@ def login():
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
         return error_response(f"Login failed: {str(e)}", 500)
+
+@user_bp.route("/login/cas", methods=["POST"])
+def login_with_cas():
+    """
+    直接使用 CAS 登录
+    如果用户已存在（通过 CAS 用户名查找），则直接登录
+    如果用户不存在，则自动创建用户并绑定 CAS
+    """
+    try:
+        data = get_json_data()
+        if data is None:
+            return error_response("Invalid JSON data")
+        
+        # 验证数据
+        cas_login_data, validation_error = validate_data(schemas.CASLogin, data)
+        if validation_error:
+            return error_response(f"Validation error: {validation_error}")
+        
+        # 验证 CAS 凭证
+        is_valid, auth_object, error_msg = verify_cas_credentials(
+            cas_login_data.cas_username, 
+            cas_login_data.cas_password
+        )
+        
+        if not is_valid:
+            return error_response(error_msg or "CAS 认证失败", 401)
+        
+        db = SessionLocal()
+        try:
+            # 查找是否已有用户绑定此 CAS 账户
+            user = db.query(models.User).filter(
+                models.User.cas_username == cas_login_data.cas_username
+            ).first()
+            
+            if user:
+                # 用户已存在，更新 CAS 绑定信息（密码可能已更改）
+                user.cas_password_encrypted = encrypt_cas_password(cas_login_data.cas_password)
+                user.cas_is_bound = True
+                user.cas_bound_at = datetime.now(timezone.utc)
+                db.commit()
+                db.refresh(user)
+            else:
+                # 用户不存在，创建新用户并绑定 CAS
+                # 使用 CAS 用户名作为系统用户名（如果冲突则添加后缀）
+                base_username = cas_login_data.cas_username
+                username = base_username
+                counter = 1
+                while db.query(models.User).filter(models.User.username == username).first():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                
+                # 创建用户（不需要密码，因为使用 CAS 登录）
+                user = models.User(
+                    username=username,
+                    hashed_password=get_password_hash(""),  # 空密码，CAS 用户不使用密码登录
+                    cas_username=cas_login_data.cas_username,
+                    cas_password_encrypted=encrypt_cas_password(cas_login_data.cas_password),
+                    cas_is_bound=True,
+                    cas_bound_at=datetime.now(timezone.utc),
+                    is_active=True
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            
+            if not user.is_active:
+                return error_response("Inactive user", 400)
+            
+            # 创建访问令牌
+            access_token_expires = timedelta(minutes=30)
+            access_token = create_user_access_token(
+                username=user.username, 
+                expires_delta=access_token_expires
+            )
+            
+            return jsonify({
+                "access_token": access_token, 
+                "token_type": "bearer",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "cas_username": user.cas_username,
+                    "cas_is_bound": user.cas_is_bound
+                }
+            })
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"CAS login error: {str(e)}")
+        return error_response(f"CAS login failed: {str(e)}", 500)
+
+@user_bp.route("/bind-cas", methods=["POST"])
+@jwt_required()
+def bind_cas():
+    """
+    注册用户绑定 CAS 账户
+    需要先登录（使用数据库账号），然后绑定 CAS 账户
+    """
+    try:
+        current_username = get_jwt_identity()
+        if not current_username:
+            return error_response("Could not validate credentials", 401)
+        
+        data = get_json_data()
+        if data is None:
+            return error_response("Invalid JSON data")
+        
+        # 验证数据
+        cas_bind_data, validation_error = validate_data(schemas.CASBind, data)
+        if validation_error:
+            return error_response(f"Validation error: {validation_error}")
+        
+        db = SessionLocal()
+        try:
+            # 获取当前用户
+            user = db.query(models.User).filter(models.User.username == current_username).first()
+            if not user:
+                return error_response("User not found", 404)
+            
+            # 检查 CAS 账户是否已被其他用户绑定
+            existing_user = db.query(models.User).filter(
+                models.User.cas_username == cas_bind_data.cas_username,
+                models.User.id != user.id
+            ).first()
+            
+            if existing_user:
+                return error_response("该 CAS 账户已被其他用户绑定", 400)
+            
+            # 验证 CAS 凭证
+            is_valid, auth_object, error_msg = verify_cas_credentials(
+                cas_bind_data.cas_username, 
+                cas_bind_data.cas_password
+            )
+            
+            if not is_valid:
+                return error_response(error_msg or "CAS 认证失败", 401)
+            
+            # 绑定 CAS 账户
+            user.cas_username = cas_bind_data.cas_username
+            user.cas_password_encrypted = encrypt_cas_password(cas_bind_data.cas_password)
+            user.cas_is_bound = True
+            user.cas_bound_at = datetime.now(timezone.utc)
+            
+            db.commit()
+            db.refresh(user)
+            
+            return jsonify(success_response({
+                "id": user.id,
+                "username": user.username,
+                "cas_username": user.cas_username,
+                "cas_is_bound": user.cas_is_bound,
+                "cas_bound_at": user.cas_bound_at.isoformat() if user.cas_bound_at else None
+            }))
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Bind CAS error: {str(e)}")
+        return error_response(f"Bind CAS failed: {str(e)}", 500)
 
 @user_bp.route("/token", methods=["POST"])
 def login_for_access_token():
@@ -308,6 +476,126 @@ def read_user(user_id: int):
     except Exception as e:
         logger.error(f"Get user error: {str(e)}")
         return error_response(f"Get user failed: {str(e)}", 500)
+
+@user_bp.route("/me/cas-status", methods=["GET"])
+@jwt_required()
+def get_cas_status():
+    """获取当前用户的 CAS 绑定状态"""
+    try:
+        current_username = get_jwt_identity()
+        if not current_username:
+            return error_response("Could not validate credentials", 401)
+        
+        db = SessionLocal()
+        try:
+            user = db.query(models.User).filter(models.User.username == current_username).first()
+            if not user:
+                return error_response("User not found", 404)
+            
+            return jsonify(success_response({
+                "cas_is_bound": user.cas_is_bound,
+                "cas_username": user.cas_username,
+                "cas_bound_at": user.cas_bound_at.isoformat() if user.cas_bound_at else None
+            }))
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Get CAS status error: {str(e)}")
+        return error_response(f"Get CAS status failed: {str(e)}", 500)
+
+@user_bp.route("/me/verify-cas", methods=["POST"])
+@jwt_required()
+def verify_cas_credentials_endpoint():
+    """
+    验证 CAS 凭证（用于数据抓取前的验证）
+    返回验证结果，但不返回密码
+    """
+    try:
+        current_username = get_jwt_identity()
+        if not current_username:
+            return error_response("Could not validate credentials", 401)
+        
+        data = get_json_data()
+        if data is None:
+            return error_response("Invalid JSON data")
+        
+        cas_password = data.get("cas_password")
+        if not cas_password:
+            return error_response("CAS password is required")
+        
+        db = SessionLocal()
+        try:
+            user = db.query(models.User).filter(models.User.username == current_username).first()
+            if not user:
+                return error_response("User not found", 404)
+            
+            if not user.cas_is_bound or not user.cas_username:
+                return error_response("用户未绑定 CAS 账户", 400)
+            
+            # 验证 CAS 凭证
+            is_valid, auth_object, error_msg = verify_cas_credentials(
+                user.cas_username,
+                cas_password
+            )
+            
+            if not is_valid:
+                return error_response(error_msg or "CAS 凭证验证失败", 401)
+            
+            # 如果验证成功，更新存储的密码（可能用户更改了密码）
+            user.cas_password_encrypted = encrypt_cas_password(cas_password)
+            db.commit()
+            
+            return jsonify(success_response({
+                "verified": True,
+                "message": "CAS 凭证验证成功"
+            }))
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Verify CAS credentials error: {str(e)}")
+        return error_response(f"Verify CAS credentials failed: {str(e)}", 500)
+
+@user_bp.route("/me/unbind-cas", methods=["POST"])
+@jwt_required()
+def unbind_cas():
+    """解绑 CAS 账户"""
+    try:
+        current_username = get_jwt_identity()
+        if not current_username:
+            return error_response("Could not validate credentials", 401)
+        
+        db = SessionLocal()
+        try:
+            user = db.query(models.User).filter(models.User.username == current_username).first()
+            if not user:
+                return error_response("User not found", 404)
+            
+            if not user.cas_is_bound:
+                return error_response("用户未绑定 CAS 账户", 400)
+            
+            # 解绑 CAS
+            user.cas_username = None
+            user.cas_password_encrypted = None
+            user.cas_is_bound = False
+            user.cas_bound_at = None
+            
+            db.commit()
+            db.refresh(user)
+            
+            return jsonify({
+                "message": "CAS 账户解绑成功"
+            })
+            
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Unbind CAS error: {str(e)}")
+        return error_response(f"Unbind CAS failed: {str(e)}", 500)
 
 @user_bp.route("/me", methods=["DELETE"])
 @jwt_required()

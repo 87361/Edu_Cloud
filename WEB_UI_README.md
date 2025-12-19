@@ -30,11 +30,11 @@ uv run python web_ui.py
 ```
 PyWebIO 界面将在 http://localhost:8080 运行
 
-### 方式二：使用启动脚本（一键启动）
+<!-- ### 方式二：使用启动脚本（一键启动）
 
 ```bash
 uv run python start_web.py
-```
+``` -->
 
 这将同时启动 Flask API 和 PyWebIO 界面。
 

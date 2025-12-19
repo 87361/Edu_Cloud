@@ -42,3 +42,19 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class CASLogin(BaseModel):
+    """直接使用 CAS 登录"""
+    cas_username: str  # CAS 用户名（学号）
+    cas_password: str  # CAS 密码
+
+class CASBind(BaseModel):
+    """绑定 CAS 账户到注册用户"""
+    cas_username: str  # CAS 用户名（学号）
+    cas_password: str  # CAS 密码
+
+class UserWithCAS(User):
+    """包含 CAS 绑定信息的用户模型"""
+    cas_username: Optional[str] = None
+    cas_is_bound: bool = False
+    cas_bound_at: Optional[datetime] = None
