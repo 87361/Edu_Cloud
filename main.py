@@ -12,6 +12,11 @@ from src.edu_cloud.user.api import user_bp
 # 导入模型以确保表被创建
 from src.edu_cloud.user import models  # 这会导入User和TokenBlacklist模型
 
+from src.edu_cloud.course.api import course_bp 
+from src.edu_cloud.discussion.api import discussion_bp
+from src.edu_cloud.notification.api import notification_bp
+
+
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -75,6 +80,10 @@ def create_app():
     from src.edu_cloud.admin.api import admin_bp
     # 注册管理员API
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    # 2. 注册 blueprint
+    app.register_blueprint(course_bp, url_prefix='/api/course')
+    app.register_blueprint(discussion_bp, url_prefix='/api/discussion')
+    app.register_blueprint(notification_bp, url_prefix='/api/notification')
     
     # 根路径
     @app.route('/')

@@ -1,26 +1,48 @@
-# src/edu_cloud/assignment/models.py
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from datetime import datetime, timezone
+from dataclasses import dataclass
+from typing import Optional
 from ..common.database import Base
 
+# ==========================================
+# 1. 数据库模型 (用于存库)
+# ==========================================
 class Assignment(Base):
     __tablename__ = "assignments"
 
-    # 1. 基础ID
     id = Column(Integer, primary_key=True, index=True)
-    
-    # 2. 归属权：这个作业属于哪个用户？(关联 users 表的 id)
+    # 归属权
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     
-    # 3. 业务字段
-    course_name = Column(String, index=True)    # 课程名称，如 "Python程序设计"
-    title = Column(String, nullable=False)      # 作业标题
-    description = Column(Text, nullable=True)   # 作业详情描述
-    deadline = Column(DateTime, nullable=True)  # 截止时间
+    # 业务字段
+    course_name = Column(String, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    deadline = Column(DateTime, nullable=True)
     
-    # 4. 状态
-    is_submitted = Column(Boolean, default=False) # 是否已提交
-    score = Column(String, nullable=True)         # 分数/等级
+    # 状态
+    is_submitted = Column(Boolean, default=False)
+    score = Column(String, nullable=True)
     
-    # 5. 记录创建时间
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+# ==========================================
+# 2. 数据传输对象 (DTO) - 用于 Scraper 返回数据
+# ==========================================
+@dataclass
+class ScrapedAssignmentData:
+    """
+    这是一个纯数据类，用于 Scraper 模块向 API 模块传递抓取到的数据。
+    使用 dataclass 可以避免使用字典传值带来的 key 拼写错误问题。
+    """
+    course_name: str
+    title: str
+    description: str
+    deadline: Optional[datetime]
+    is_submitted: bool
+    score: str
+    
+    # 唯一标识符生成逻辑 (用于去重)
+    @property
+    def unique_key(self) -> str:
+        return f"{self.course_name}_{self.title}"
