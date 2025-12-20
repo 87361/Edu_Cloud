@@ -10,27 +10,72 @@
 
 ### 基本功能
 - **用户系统**: 支持多用户注册、登录和个人空间，实现数据隔离
-- **个人主页**: 展示用户的个人信息、本学期课程列表、待办事项和消息
-- **课程详情页**: 包含课程基本信息、讲义/主页、作业列表与详情、讨论区、公告栏
+  - 本地账号注册和登录
+  - CAS统一认证登录（支持北京邮电大学CAS系统）
+  - JWT令牌认证和会话管理
+  - 用户角色管理（普通用户/管理员）
+- **课程管理**: 完整的课程信息管理
+  - 课程列表展示和详情查看
+  - 课程信息同步（从学校系统抓取）
+  - 本学期课程筛选
+- **作业管理**: 全面的作业功能
+  - 作业列表展示（支持筛选和排序）
+  - 作业详情查看
+  - 作业同步（从学校系统自动抓取）
+  - 作业提交（支持文件上传）
+- **讨论区**: 课程讨论和交流
+  - 讨论主题发布和回复
+  - 讨论内容管理
+- **通知系统**: 消息和通知管理
+  - 系统通知推送
+  - 通知列表和详情查看
+- **管理员功能**: 系统管理后台
+  - 用户管理（查看、编辑、删除）
+  - 系统数据管理
+  - 权限控制
+
+### 用户界面
+- **PyQt6桌面应用**: 基于Fluent Widgets的现代化GUI客户端
+  - 美观的现代化界面设计
+  - 完整的作业管理功能
+  - 支持深色/浅色主题切换
+- **PyWebIO Web界面**: 基于Web的轻量级界面
+  - 课程大厅展示
+  - 作业详情和提交
+  - 响应式布局设计
 
 ### 技术特性
 - **现代化架构**: 基于Flask构建的高性能Web应用
 - **数据库支持**: SQLAlchemy ORM，支持SQLite/PostgreSQL
 - **用户认证**: 安全的JWT用户认证和会话管理
 - **API设计**: RESTful API设计，完整的错误处理
+- **多端支持**: 同时支持Web API、桌面GUI和Web界面
+- **数据同步**: 支持从学校系统自动同步课程和作业数据
 
 ## 🛠 技术栈
 
 ### 后端技术
 - **语言**: Python 3.12+
-- **框架**: Flask
-- **数据库**: SQLAlchemy ORM
+- **框架**: Flask 3.0+
+- **数据库**: SQLAlchemy ORM 2.0+
 - **依赖管理**: pyproject.toml + uv
-- **认证**: JWT令牌认证
+- **认证**: JWT令牌认证 (Flask-JWT-Extended)
+- **CAS认证**: 支持北京邮电大学CAS统一认证
+- **数据抓取**: buptmw库（学校系统数据同步）
 
 ### 前端技术
-- **框架**: Vue.js (次要验证性功能)
-- **构建工具**: Vite
+- **桌面GUI**: PyQt6 + PyQt6-Fluent-Widgets
+  - 现代化Fluent Design风格界面
+  - 支持深色/浅色主题
+  - 完整的桌面应用体验
+- **Web界面**: PyWebIO
+  - 轻量级Web界面框架
+  - 快速原型开发
+  - 响应式布局
+- **Web API**: RESTful API
+  - 标准JSON格式
+  - 完整的CORS支持
+  - 详细的错误处理
 
 ## 📁 项目结构
 
@@ -42,9 +87,11 @@ edu_cloud/
 │       ├── common/                 # 公共模块
 │       │   ├── __init__.py
 │       │   ├── auth.py           # 认证模块
+│       │   ├── cas_auth.py        # CAS认证
 │       │   ├── config.py          # 配置管理
 │       │   ├── database.py        # 数据库连接
-│       │   └── security.py        # 安全相关
+│       │   ├── security.py        # 安全相关
+│       │   └── token_manager.py   # Token管理
 │       ├── user/                  # 用户模块
 │       │   ├── __init__.py
 │       │   ├── api.py            # 用户API路由
@@ -53,23 +100,59 @@ edu_cloud/
 │       │   └── tests.py         # 用户功能测试
 │       ├── course/                # 课程模块
 │       │   ├── __init__.py
-│       │   ├── api.py
-│       │   ├── models.py
-│       │   └── schemas.py
+│       │   ├── api.py            # 课程API路由
+│       │   ├── models.py         # 课程数据模型
+│       │   ├── scraper.py        # 课程数据抓取
+│       │   └── services.py       # 课程业务逻辑
 │       ├── assignment/            # 作业模块
 │       │   ├── __init__.py
-│       │   ├── api.py
-│       │   ├── models.py
-│       │   └── schemas.py
+│       │   ├── api.py            # 作业API路由
+│       │   ├── models.py         # 作业数据模型
+│       │   ├── schemas.py        # 作业数据验证
+│       │   ├── scraper.py        # 作业数据抓取
+│       │   └── services.py       # 作业业务逻辑
+│       ├── discussion/            # 讨论区模块
+│       │   ├── __init__.py
+│       │   ├── api.py            # 讨论API路由
+│       │   ├── models.py         # 讨论数据模型
+│       │   ├── scraper.py        # 讨论数据抓取
+│       │   └── services.py       # 讨论业务逻辑
+│       ├── notification/          # 通知模块
+│       │   ├── __init__.py
+│       │   ├── api.py            # 通知API路由
+│       │   ├── models.py         # 通知数据模型
+│       │   ├── scraper.py        # 通知数据抓取
+│       │   └── services.py       # 通知业务逻辑
+│       ├── admin/                 # 管理员模块
+│       │   ├── __init__.py
+│       │   ├── api.py            # 管理员API路由
+│       │   └── ADMIN_README.md   # 管理员文档
 │       └── scripts/               # 脚本模块
-│           └── __init__.py
-├── main.py                        # 应用入口
+│           ├── __init__.py
+│           ├── create_admin.py   # 创建管理员脚本
+│           └── migrate_*.py     # 数据库迁移脚本
+├── gui/                           # GUI桌面应用
+│   ├── __init__.py
+│   ├── main.py                   # GUI应用入口
+│   ├── api_client.py             # API客户端
+│   ├── config.py                 # GUI配置
+│   ├── models/                   # 数据模型
+│   ├── services/                 # 业务服务
+│   ├── utils/                    # 工具模块
+│   └── views/                    # 界面视图
+│       ├── login_window.py       # 登录窗口
+│       ├── main_window.py        # 主窗口
+│       ├── admin_window.py       # 管理员窗口
+│       └── components/           # UI组件
+├── main.py                       # Flask API入口
+├── web_ui.py                     # PyWebIO Web界面
+├── start_gui.py                  # GUI启动脚本
+├── start_web.py                  # Web启动脚本
 ├── pyproject.toml                # 项目配置
-├── .env.example                  # 环境变量示例
-├── .gitignore                    # Git忽略文件
-├── TEST_REPORT.md                # 测试报告
-├── FINAL_TEST_REPORT.md          # 完整测试报告
-└── README.md                     # 项目文档
+├── config/                       # 配置文件目录
+├── README.md                     # 项目文档
+├── GUI_README.md                 # GUI使用说明
+└── WEB_UI_README.md              # Web界面使用说明
 ```
 
 ## 🚀 快速开始
@@ -108,14 +191,51 @@ edu_cloud/
    uv pip install -e .
    ```
 
-5. **启动应用**
+5. **（可选）创建管理员账户**
+   ```bash
+   python -m src.edu_cloud.scripts.create_admin
+   ```
+   按照提示输入管理员用户名、邮箱和密码。
+
+6. **启动应用**
+
+   项目提供三种启动方式：
+
+   **方式一：启动Flask API服务器**
    ```bash
    uv run python main.py
    ```
+   - API根路径: http://localhost:5000
+   - 健康检查: http://localhost:5000/health
+
+   **方式二：启动GUI桌面应用**
+   ```bash
+   python start_gui.py
+   ```
+   或
+   ```bash
+   python -m gui.main
+   ```
+   - 需要先启动Flask API服务器
+   - 支持本地账号和CAS登录
+   - 详细使用说明请参考 [GUI_README.md](gui/GUI_README.md)
+
+   **方式三：启动Web界面**
+   ```bash
+   # 终端1：启动Flask API
+   uv run python main.py
+   
+   # 终端2：启动PyWebIO界面
+   uv run python web_ui.py
+   ```
+   - Flask API: http://localhost:5000
+   - Web界面: http://localhost:8080
+   - 详细使用说明请参考 [WEB_UI_README.md](WEB_UI_README.md)
 
 6. **访问应用**
    - API根路径: http://localhost:5000
-   - 用户API: http://localhost:5000/api/user
+   - Web界面: http://localhost:8080 (如果启动)
+   - GUI应用: 运行启动脚本后自动打开窗口
 
 ## 📖 API文档
 
@@ -124,7 +244,8 @@ edu_cloud/
 | 方法 | 端点 | 功能 | 认证 |
 |------|--------|------|--------|
 | POST | `/api/user/register` | 用户注册 | 无 |
-| POST | `/api/user/login` | 用户登录 | 无 |
+| POST | `/api/user/login` | 用户登录（本地账号） | 无 |
+| POST | `/api/user/cas-login` | CAS统一认证登录 | 无 |
 | POST | `/api/user/token` | 获取JWT令牌 | 无 |
 | GET | `/api/user/me` | 获取当前用户信息 | 需要 |
 | PUT | `/api/user/me` | 更新用户信息 | 需要 |
@@ -133,6 +254,50 @@ edu_cloud/
 | POST | `/api/user/change-password` | 修改密码 | 需要 |
 | POST | `/api/user/logout` | 用户登出 | 需要 |
 | GET | `/api/user/` | 获取用户列表 | 需要 |
+
+### 课程API端点
+
+| 方法 | 端点 | 功能 | 认证 |
+|------|--------|------|--------|
+| GET | `/api/course/` | 获取课程列表 | 需要 |
+| GET | `/api/course/<id>` | 获取课程详情 | 需要 |
+| GET | `/api/course/current-semester` | 获取本学期课程 | 需要 |
+| POST | `/api/course/sync` | 同步课程数据 | 需要 |
+
+### 作业API端点
+
+| 方法 | 端点 | 功能 | 认证 |
+|------|--------|------|--------|
+| GET | `/api/assignment/` | 获取作业列表 | 需要 |
+| GET | `/api/assignment/<id>` | 获取作业详情 | 需要 |
+| POST | `/api/assignment/sync` | 同步作业数据 | 需要 |
+| POST | `/api/assignment/<id>/submit` | 提交作业 | 需要 |
+
+### 讨论区API端点
+
+| 方法 | 端点 | 功能 | 认证 |
+|------|--------|------|--------|
+| GET | `/api/discussion/` | 获取讨论列表 | 需要 |
+| GET | `/api/discussion/<id>` | 获取讨论详情 | 需要 |
+| POST | `/api/discussion/` | 创建讨论 | 需要 |
+| POST | `/api/discussion/<id>/reply` | 回复讨论 | 需要 |
+
+### 通知API端点
+
+| 方法 | 端点 | 功能 | 认证 |
+|------|--------|------|--------|
+| GET | `/api/notification/` | 获取通知列表 | 需要 |
+| GET | `/api/notification/<id>` | 获取通知详情 | 需要 |
+| POST | `/api/notification/sync` | 同步通知数据 | 需要 |
+
+### 管理员API端点
+
+| 方法 | 端点 | 功能 | 认证 |
+|------|--------|------|--------|
+| GET | `/api/admin/users` | 获取用户列表 | 管理员 |
+| GET | `/api/admin/users/<id>` | 获取用户详情 | 管理员 |
+| PUT | `/api/admin/users/<id>` | 更新用户信息 | 管理员 |
+| DELETE | `/api/admin/users/<id>` | 删除用户 | 管理员 |
 
 ### 请求示例
 
@@ -252,7 +417,46 @@ uv run pytest src/edu_cloud/user/tests.py -v --tb=short
 
 ## 📝 更新日志
 
-### v1.0.0 (当前版本)
+### v2.0.0 (当前版本)
+- ✅ **课程管理系统**：完整的课程信息管理功能
+  - 课程列表和详情查看
+  - 课程数据同步（从学校系统抓取）
+  - 本学期课程筛选
+- ✅ **作业管理系统**：全面的作业功能
+  - 作业列表展示（支持筛选和排序）
+  - 作业详情查看
+  - 作业数据同步（从学校系统自动抓取）
+  - 作业提交（支持文件上传）
+- ✅ **讨论区功能**：课程讨论和交流
+  - 讨论主题发布和回复
+  - 讨论内容管理
+- ✅ **通知系统**：消息和通知管理
+  - 系统通知推送
+  - 通知列表和详情查看
+- ✅ **管理员功能**：系统管理后台
+  - 用户管理（查看、编辑、删除）
+  - 系统数据管理
+  - 权限控制
+- ✅ **CAS认证支持**：统一认证登录
+  - 支持北京邮电大学CAS系统
+  - 自动获取用户信息
+- ✅ **PyQt6桌面应用**：现代化GUI客户端
+  - 基于Fluent Widgets的美观界面
+  - 完整的作业管理功能
+  - 支持深色/浅色主题切换
+  - 管理员和普通用户界面分离
+- ✅ **PyWebIO Web界面**：轻量级Web界面
+  - 课程大厅展示
+  - 作业详情和提交
+  - 响应式布局设计
+- ✅ **数据同步功能**：自动同步学校系统数据
+  - 课程信息同步
+  - 作业信息同步
+  - 通知信息同步
+- ✅ **多端支持**：同时支持Web API、桌面GUI和Web界面
+- ✅ **性能优化**：异步处理和缓存优化
+
+### v1.0.0
 - ✅ 项目初始化和Flask迁移
 - ✅ 用户认证系统完整实现
 - ✅ 数据库配置和模型
@@ -261,12 +465,6 @@ uv run pytest src/edu_cloud/user/tests.py -v --tb=short
 - ✅ JWT认证和安全防护
 - ✅ 全面的测试套件
 - ✅ 错误处理和验证
-
-### 计划功能
-- 🔄 课程管理系统
-- 🔄 作业管理系统
-- 🔄 讨论区功能
-- 🔄 前端界面开发
 
 ## 📄 许可证
 
