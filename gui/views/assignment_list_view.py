@@ -24,6 +24,15 @@ class AssignmentListViewModel:
         """获取筛选后的作业列表"""
         filtered = self.assignments
         
+        # 过滤掉无效的课程名称（未分类、待办事项、未知课程等）
+        filtered = [
+            a for a in filtered 
+            if a.get("course_name") 
+            and "未分类" not in a.get("course_name", "") 
+            and "待办事项" not in a.get("course_name", "")
+            and a.get("course_name") != "未知课程"
+        ]
+        
         # 状态筛选
         if self.filter_status == "pending":
             filtered = [a for a in filtered if a.get("status") == "未提交"]

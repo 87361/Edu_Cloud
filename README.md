@@ -191,10 +191,21 @@ edu_cloud/
    uv pip install -e .
    ```
 
-5. **（可选）创建管理员账户**
+5. **初始化数据库**
+   ```bash
+   python -m src.edu_cloud.scripts.init_db
+   ```
+   这会创建所有数据库表并运行必要的迁移脚本。
+   
+   可选参数：
+   - `--skip-migrations`: 跳过运行迁移脚本
+   - `--create-admin`: 初始化后创建管理员账号（交互式）
+
+6. **（可选）创建管理员账户**
    ```bash
    python -m src.edu_cloud.scripts.create_admin
    ```
+   或者使用初始化脚本的 `--create-admin` 选项。
    按照提示输入管理员用户名、邮箱和密码。
 
 6. **启动应用**

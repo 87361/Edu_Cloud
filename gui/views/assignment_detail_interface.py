@@ -2,7 +2,7 @@
 from typing import Optional
 from pathlib import Path
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QFileDialog, QTextBrowser
 from PyQt6.QtGui import QColor
 
 from qfluentwidgets import (
@@ -60,13 +60,16 @@ class AssignmentDetailInterface(QWidget):
         self.info_lbl = BodyLabel("课程信息 | DDL", self)
         self.info_lbl.setTextColor(QColor(120, 120, 120), QColor(180, 180, 180))
 
-        # 描述卡片
+        # 描述卡片（使用QTextBrowser支持HTML显示）
         self.desc_card = ElevatedCardWidget(self)
         self.desc_layout = QVBoxLayout(self.desc_card)
         self.desc_layout.setContentsMargins(20, 20, 20, 20)
-        self.desc_lbl = BodyLabel("作业描述内容...", self.desc_card)
-        self.desc_lbl.setWordWrap(True)
-        self.desc_layout.addWidget(self.desc_lbl)
+        self.desc_browser = QTextBrowser(self.desc_card)
+        self.desc_browser.setReadOnly(True)
+        self.desc_browser.setOpenExternalLinks(True)  # 允许打开外部链接
+        self.desc_browser.setPlaceholderText("作业描述内容...")
+        self.desc_browser.setMinimumHeight(200)
+        self.desc_layout.addWidget(self.desc_browser)
 
         # 文件上传区域
         file_layout = QHBoxLayout()
@@ -125,7 +128,18 @@ class AssignmentDetailInterface(QWidget):
         self.info_lbl.setText(
             f"{assignment.course_name}  •  截止日期: {deadline}"
         )
-        self.desc_lbl.setText(assignment.description or "无描述")
+        # 使用HTML格式显示描述（如果description是HTML，直接显示；否则作为纯文本）
+        description = assignment.description or "无描述"
+        if description.strip().startswith("<"):
+            # 看起来是HTML格式
+            self.desc_browser.setHtml(description)
+        else:
+            # 纯文本格式，转换为HTML显示
+            from html import escape
+            escaped_text = escape(description)
+            # 将换行符转换为<br>
+            html_text = escaped_text.replace("\n", "<br>")
+            self.desc_browser.setHtml(f"<div style='font-family: Microsoft YaHei, Arial; font-size: 14px; line-height: 1.6;'>{html_text}</div>")
         self.text_edit.clear()
         self.selected_file_path = None
         self.file_label.setText("未选择文件")
@@ -162,7 +176,8 @@ class AssignmentDetailInterface(QWidget):
         )
 
     def _on_assignment_loaded(self, assignment: Assignment) -> None:
-        """作业加载成功"""
+        """作业加载成功（从详情接口获取的完整数据）"""
+        # 更新所有数据，包括完整的description
         self.update_data(assignment)
 
     def _on_load_failed(self, error_msg: str) -> None:

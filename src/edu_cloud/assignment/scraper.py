@@ -83,10 +83,19 @@ class AssignmentScraper:
         if isinstance(data, dict): data = data.get("records", [])
         
         for c in data:
-            courses.append({
-                "id": c.get("id") or c.get("siteId"), 
-                "name": c.get("name") or c.get("siteName")
-            })
+            course_name = c.get("name") or c.get("siteName") or ""
+            course_id = c.get("id") or c.get("siteId")
+            
+            # 过滤掉无效的课程名称（未分类、待办事项等）
+            if not course_name or "未分类" in course_name or "待办事项" in course_name:
+                continue
+            
+            # 确保课程ID和名称都存在
+            if course_id and course_name:
+                courses.append({
+                    "id": course_id, 
+                    "name": course_name
+                })
         return courses
 
     def _fetch_undone(self) -> List[ScrapedAssignmentData]:
@@ -99,8 +108,15 @@ class AssignmentScraper:
             if resp.status_code == 200:
                 records = resp.json().get("data", {}).get("undoneList", [])
                 for item in records:
+                    # 处理课程名称：如果siteName为空、None或包含"未分类"等无效值，则跳过
+                    site_name = item.get("siteName") or ""
+                    if not site_name or "未分类" in site_name or "待办事项" in site_name:
+                        # 尝试从其他字段获取课程信息，如果都没有则跳过这条记录
+                        # 因为未分类的作业无法关联到具体课程，不应该存储
+                        continue
+                    
                     results.append(ScrapedAssignmentData(
-                        course_name=item.get("siteName") or "未知课程",
+                        course_name=site_name,
                         title=item.get("activityName") or "无标题",
                         description="",
                         deadline=self._parse_time(item.get("endTime")),
@@ -111,8 +127,30 @@ class AssignmentScraper:
             pass # 待办抓取失败不影响主流程
         return results
 
+    def _fetch_assignment_detail(self, assignment_id: str) -> str:
+        """获取单个作业的详情描述"""
+        url = f"{API_BASE}/work/student/detail"
+        payload = {"id": assignment_id, "userId": self.user_id}
+        
+        try:
+            resp = self.session.post(url, json=payload, headers=self._get_headers())
+            if resp.status_code == 200:
+                data = resp.json().get("data", {})
+                # 尝试多个可能的字段名
+                description = (
+                    data.get("description") or 
+                    data.get("content") or 
+                    data.get("detail") or 
+                    data.get("assignmentDescription") or
+                    ""
+                )
+                return description if description else ""
+        except Exception as e:
+            print(f"获取作业详情失败 (ID: {assignment_id}): {str(e)}")
+        return ""
+
     def _fetch_course_details(self, site_id, course_name) -> List[ScrapedAssignmentData]:
-        """抓取特定课程的所有作业"""
+        """抓取特定课程的所有作业（包含详情描述）"""
         url = f"{API_BASE}/work/student/list"
         payload = {"siteId": site_id, "userId": self.user_id, "current": 1, "size": 50}
         results = []
@@ -126,16 +164,40 @@ class AssignmentScraper:
                     submit_time = item.get("submitTime")
                     is_submitted = bool(submit_time and str(submit_time).strip())
                     
+                    # 确保课程名称有效（二次检查，防止传入无效值）
+                    if not course_name or "未分类" in course_name or "待办事项" in course_name:
+                        continue
+                    
+                    # 获取作业ID（用于获取详情）
+                    assignment_id = item.get("id") or item.get("assignmentId") or item.get("workId")
+                    
+                    # 先从列表接口获取description（尝试多个可能的字段名）
+                    description = (
+                        item.get("description") or 
+                        item.get("content") or 
+                        item.get("detail") or 
+                        item.get("assignmentDescription") or
+                        item.get("workDescription") or
+                        ""
+                    )
+                    
+                    # 如果列表接口没有description，且作业ID存在，则调用详情接口
+                    if not description and assignment_id:
+                        print(f"  [调试] 列表接口无description，尝试获取详情 (作业ID: {assignment_id}, 标题: {item.get('assignmentTitle') or item.get('title')})")
+                        description = self._fetch_assignment_detail(str(assignment_id))
+                        if description:
+                            print(f"  [调试] 成功获取详情，长度: {len(description)}")
+                    
                     results.append(ScrapedAssignmentData(
                         course_name=course_name,
                         title=item.get("assignmentTitle") or item.get("title"),
-                        description=item.get("description", ""),
+                        description=description,
                         deadline=self._parse_time(item.get("assignmentEndTime")),
                         is_submitted=is_submitted,
                         score=str(item.get("score") or "")
                     ))
-        except:
-            pass
+        except Exception as e:
+            print(f"抓取课程作业失败 (课程: {course_name}): {str(e)}")
         return results
 
     def run(self) -> List[ScrapedAssignmentData]:

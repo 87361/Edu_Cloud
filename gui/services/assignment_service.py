@@ -38,7 +38,7 @@ class AssignmentService(QObject):
 
     def load_assignment(self, assignment_id: int) -> Assignment:
         """
-        加载作业详情
+        加载作业详情（调用详情接口获取完整信息，包括description）
 
         Args:
             assignment_id: 作业ID
@@ -49,10 +49,8 @@ class AssignmentService(QObject):
         Raises:
             ValueError: 作业不存在
         """
-        assignments_data = api_client.get_assignments()
-        assignment_data = next(
-            (a for a in assignments_data if a.get("id") == assignment_id), None
-        )
+        # 调用详情接口获取完整的作业信息（包括description）
+        assignment_data = api_client.get_assignment_detail(assignment_id)
 
         if not assignment_data:
             raise ValueError("作业不存在")
@@ -79,6 +77,25 @@ class AssignmentService(QObject):
         new_count = stats.get("new_added", 0)
         total = stats.get("total_fetched", 0)
         return (msg, new_count, total)
+    
+    def sync_all(
+        self, school_username: str = None, school_password: str = None, cas_password: str = None
+    ) -> tuple[str, dict]:
+        """
+        统一同步（课程+作业）
+
+        Args:
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
+
+        Returns:
+            (消息, 统计信息字典)
+        """
+        response = api_client.sync_all(school_username, school_password, cas_password)
+        msg = response.get("msg", "同步完成")
+        stats = response.get("stats", {})
+        return (msg, stats)
 
     def submit_assignment(self, assignment_id: int, file_path: str) -> None:
         """

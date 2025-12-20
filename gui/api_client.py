@@ -193,6 +193,19 @@ class APIClient:
         response = self._make_request("GET", "/api/assignment/")
         return response.get("data", [])
     
+    def get_assignment_detail(self, assignment_id: int) -> Dict[str, Any]:
+        """
+        获取作业详情（包含完整的description）
+        
+        Args:
+            assignment_id: 作业ID
+        
+        Returns:
+            作业详情数据
+        """
+        response = self._make_request("GET", f"/api/assignment/{assignment_id}")
+        return response.get("data", {})
+    
     def sync_assignments(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
         """
         同步作业（从学校系统抓取）
@@ -213,6 +226,43 @@ class APIClient:
         if cas_password:
             data["cas_password"] = cas_password
         return self._make_request("POST", "/api/assignment/sync", data=data)
+    
+    def sync_all(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
+        """
+        统一同步（课程+作业）（从学校系统抓取）
+        
+        Args:
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
+        
+        Returns:
+            同步结果（包含课程和作业的统计信息）
+        """
+        data = {}
+        if school_username:
+            data["school_username"] = school_username
+        if school_password:
+            data["school_password"] = school_password
+        if cas_password:
+            data["cas_password"] = cas_password
+        return self._make_request("POST", "/api/assignment/sync/all", data=data)
+    
+    def get_course_assignments(self, course_name: str) -> List[Dict[str, Any]]:
+        """
+        获取某个课程的所有作业
+        
+        Args:
+            course_name: 课程名称
+        
+        Returns:
+            作业列表
+        """
+        # URL编码课程名称
+        from urllib.parse import quote
+        encoded_course_name = quote(course_name, safe='')
+        response = self._make_request("GET", f"/api/assignment/course/{encoded_course_name}")
+        return response.get("data", [])
     
     def submit_assignment(self, assignment_id: int, file_path: str) -> Dict[str, Any]:
         """
@@ -382,6 +432,21 @@ class APIClient:
         if cas_password:
             data["cas_password"] = cas_password
         return self._make_request("POST", "/api/notification/sync", data=data)
+    
+    def get_course_notifications(self, course_name: str) -> List[Dict[str, Any]]:
+        """
+        获取某个课程的公告列表
+        
+        Args:
+            course_name: 课程名称
+        
+        Returns:
+            公告列表
+        """
+        from urllib.parse import quote
+        encoded_course_name = quote(course_name, safe='')
+        response = self._make_request("GET", f"/api/notification/course/{encoded_course_name}")
+        return response.get("data", [])
     
     # ==================== 管理员相关API ====================
     

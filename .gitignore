@@ -9,8 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-app.db
-app.db-shm
-app.db-wal
+# Database files (SQLite)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
 config

@@ -21,8 +21,11 @@ from qfluentwidgets import (
 )
 
 from ..models.course import Course
+from ..models.assignment import Assignment
+from ..models.notification import Notification
 from ..services.course_service import CourseService
 from ..services.async_service import AsyncService
+from ..api_client import api_client
 
 
 class ResourceItemCard(SimpleCardWidget):
@@ -178,11 +181,19 @@ class CourseDetailInterface(QWidget):
         self.stacked_widget.addWidget(self.resources_page)
 
         # -- 作业页 --
-        self.assignments_page = self._create_placeholder_page("暂无作业", FIF.EDIT) # 修正图标
+        self.assignments_page = QWidget()
+        self.assignments_layout = QVBoxLayout(self.assignments_page)
+        self.assignments_layout.setContentsMargins(0, 10, 0, 0)
+        self.assignments_layout.setSpacing(10)
+        self.assignments_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.stacked_widget.addWidget(self.assignments_page)
 
         # -- 公告页 --
-        self.notifications_page = self._create_placeholder_page("暂无公告", FIF.RINGER) # 确保使用 RINGER 或 RING
+        self.notifications_page = QWidget()
+        self.notifications_layout = QVBoxLayout(self.notifications_page)
+        self.notifications_layout.setContentsMargins(0, 10, 0, 0)
+        self.notifications_layout.setSpacing(10)
+        self.notifications_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.stacked_widget.addWidget(self.notifications_page)
 
         # -- 讨论页 --
@@ -233,6 +244,8 @@ class CourseDetailInterface(QWidget):
         self._update_basic_info()
         self._load_course_detail()
         self._load_resources()
+        self._load_assignments()
+        self._load_notifications()
 
     def _update_basic_info(self) -> None:
         if not self.course:
@@ -306,6 +319,177 @@ class CourseDetailInterface(QWidget):
         for resource in resources:
             card = ResourceItemCard(resource, self.resources_page)
             self.resources_layout.addWidget(card)
+
+    def _load_assignments(self) -> None:
+        """异步加载课程作业"""
+        if not self.course or not self.course.name:
+            return
+        
+        def load_func():
+            try:
+                assignments_data = api_client.get_course_assignments(self.course.name)
+                return [Assignment.from_dict(data) for data in assignments_data]
+            except Exception as e:
+                self._on_load_failed(str(e))
+                raise
+
+        self.async_service.execute_async(
+            load_func, self._on_assignments_loaded, self._on_load_failed
+        )
+
+    def _on_assignments_loaded(self, assignments: list[Assignment]) -> None:
+        """作业列表加载成功"""
+        # 清除现有作业
+        widgets_to_remove = []
+        for i in range(self.assignments_layout.count()):
+            item = self.assignments_layout.itemAt(i)
+            if item and item.widget():
+                widgets_to_remove.append(item.widget())
+        
+        for widget in widgets_to_remove:
+            self.assignments_layout.removeWidget(widget)
+            widget.deleteLater()
+
+        # 显示作业列表
+        if not assignments:
+            empty_label = BodyLabel("暂无作业", self.assignments_page)
+            empty_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.assignments_layout.addWidget(empty_label)
+            return
+
+        # 过滤掉无效的课程名称
+        valid_assignments = [
+            a for a in assignments 
+            if a.course_name 
+            and "未分类" not in a.course_name 
+            and "待办事项" not in a.course_name
+            and a.course_name != "未知课程"
+        ]
+
+        if not valid_assignments:
+            empty_label = BodyLabel("暂无作业", self.assignments_page)
+            empty_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.assignments_layout.addWidget(empty_label)
+            return
+
+        for assignment in valid_assignments:
+            card = ElevatedCardWidget(self.assignments_page)
+            card.setBorderRadius(8)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(20, 15, 20, 15)
+            card_layout.setSpacing(8)
+
+            # 作业标题
+            title_label = BodyLabel(assignment.title, card)
+            card_layout.addWidget(title_label)
+
+            # 作业信息（截止时间、状态、分数）
+            info_parts = []
+            if assignment.deadline:
+                deadline = assignment.get_deadline_display()
+                info_parts.append(f"截止: {deadline}")
+            info_parts.append(f"状态: {assignment.status}")
+            if assignment.score:
+                info_parts.append(f"分数: {assignment.score}")
+            
+            info_label = CaptionLabel(" • ".join(info_parts), card)
+            info_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+            card_layout.addWidget(info_label)
+
+            self.assignments_layout.addWidget(card)
+
+    def _load_notifications(self) -> None:
+        """异步加载课程公告"""
+        if not self.course or not self.course.name:
+            return
+        
+        def load_func():
+            try:
+                notifications_data = api_client.get_course_notifications(self.course.name)
+                return [Notification.from_dict(data) for data in notifications_data]
+            except Exception as e:
+                self._on_load_failed(str(e))
+                raise
+
+        self.async_service.execute_async(
+            load_func, self._on_notifications_loaded, self._on_load_failed
+        )
+
+    def _on_notifications_loaded(self, notifications: list[Notification]) -> None:
+        """公告列表加载成功"""
+        # 注意：PyQt的信号系统会自动将信号发送到主线程，所以这里应该已经在主线程了
+        # 清除现有公告
+        widgets_to_remove = []
+        for i in range(self.notifications_layout.count()):
+            item = self.notifications_layout.itemAt(i)
+            if item and item.widget():
+                widgets_to_remove.append(item.widget())
+        
+        for widget in widgets_to_remove:
+            self.notifications_layout.removeWidget(widget)
+            widget.deleteLater()
+
+        # 显示公告列表
+        if not notifications:
+            empty_label = BodyLabel("暂无公告", self.notifications_page)
+            empty_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.notifications_layout.addWidget(empty_label)
+            return
+
+        for notification in notifications:
+            card = ElevatedCardWidget(self.notifications_page)
+            card.setBorderRadius(8)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(20, 15, 20, 15)
+            card_layout.setSpacing(8)
+
+            # 公告标题和类型
+            header_layout = QHBoxLayout()
+            title_label = BodyLabel(notification.title or "无标题", card)
+            header_layout.addWidget(title_label)
+            header_layout.addStretch()
+            
+            # 类型标签
+            if notification.type:
+                type_label = CaptionLabel(notification.type, card)
+                type_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+                header_layout.addWidget(type_label)
+            
+            card_layout.addLayout(header_layout)
+
+            # 公告内容（简化显示，只显示前100字符）
+            if notification.content:
+                import re
+                # 简单去除HTML标签
+                content_text = re.sub(r'<[^>]+>', '', notification.content)
+                if len(content_text) > 100:
+                    content_text = content_text[:100] + "..."
+                content_label = BodyLabel(content_text, card)
+                content_label.setWordWrap(True)
+                content_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+                card_layout.addWidget(content_label)
+
+            # 公告信息（时间、阅读状态）
+            info_parts = []
+            if notification.time:
+                try:
+                    from datetime import datetime
+                    time_str = notification.time
+                    if 'T' in time_str:
+                        time_str = time_str.split('T')[0]
+                    info_parts.append(f"时间: {time_str}")
+                except:
+                    pass
+            info_parts.append("已读" if notification.is_read else "未读")
+            
+            info_label = CaptionLabel(" • ".join(info_parts), card)
+            info_label.setTextColor(Qt.GlobalColor.gray, Qt.GlobalColor.gray)
+            card_layout.addWidget(info_label)
+
+            self.notifications_layout.addWidget(card)
 
     def _on_load_failed(self, error_msg: str) -> None:
         """加载失败"""

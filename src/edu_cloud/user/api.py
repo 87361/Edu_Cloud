@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from typing import Dict, Any, Optional
 import logging
 import json
+import threading
 
 from ..common.database import get_db, SessionLocal
 from ..common.security import verify_password, get_password_hash
@@ -231,6 +232,98 @@ def login_with_cas():
                 expires_delta=access_token_expires
             )
             
+            # 准备启动后台同步
+            print(f"\n[CAS登录] 准备为用户 {user.username} 启动后台同步...")
+            logger.info(f"准备为用户 {user.username} 启动后台同步")
+            
+            # 在后台线程中执行全面同步（不阻塞登录响应）
+            def sync_all_data():
+                """后台同步所有数据：作业、课程、讨论区、通知"""
+                try:
+                    sync_db = SessionLocal()
+                    try:
+                        # 导入同步服务
+                        from ..assignment.services import AssignmentService
+                        from ..course.services import CourseService
+                        from ..discussion.services import DiscussionService
+                        from ..notification.services import NotificationService
+                        
+                        # 使用print确保输出可见，同时记录日志
+                        print(f"\n{'='*60}")
+                        print(f"[CAS登录自动同步] 开始为用户 {user.username} (CAS: {cas_login_data.cas_username}) 执行全面同步")
+                        print(f"{'='*60}\n")
+                        logger.info(f"开始为用户 {user.username} (CAS: {cas_login_data.cas_username}) 执行全面同步")
+                        
+                        # 1. 同步课程（基础数据，需要先同步）
+                        print("[同步] 1/4 开始同步课程...")
+                        try:
+                            CourseService.sync_courses(
+                                sync_db, user.id,
+                                cas_login_data.cas_username,
+                                cas_login_data.cas_password
+                            )
+                            print("[同步] ✓ 课程同步完成")
+                            logger.info("✓ 课程同步完成")
+                        except Exception as e:
+                            print(f"[同步] ✗ 课程同步失败: {str(e)}")
+                            logger.error(f"✗ 课程同步失败: {str(e)}", exc_info=True)
+                        
+                        # 2. 同步作业（依赖课程数据）
+                        print("[同步] 2/4 开始同步作业...")
+                        try:
+                            AssignmentService.sync_assignments(
+                                sync_db, user.id,
+                                cas_login_data.cas_username,
+                                cas_login_data.cas_password
+                            )
+                            print("[同步] ✓ 作业同步完成")
+                            logger.info("✓ 作业同步完成")
+                        except Exception as e:
+                            print(f"[同步] ✗ 作业同步失败: {str(e)}")
+                            logger.error(f"✗ 作业同步失败: {str(e)}", exc_info=True)
+                        
+                        # 3. 同步讨论区
+                        print("[同步] 3/4 开始同步讨论区...")
+                        try:
+                            DiscussionService.sync_discussions(
+                                sync_db,
+                                cas_login_data.cas_username,
+                                cas_login_data.cas_password
+                            )
+                            print("[同步] ✓ 讨论区同步完成")
+                            logger.info("✓ 讨论区同步完成")
+                        except Exception as e:
+                            print(f"[同步] ✗ 讨论区同步失败: {str(e)}")
+                            logger.error(f"✗ 讨论区同步失败: {str(e)}", exc_info=True)
+                        
+                        # 4. 同步通知
+                        print("[同步] 4/4 开始同步通知...")
+                        try:
+                            NotificationService.sync_notifications(
+                                sync_db, user.id,
+                                cas_login_data.cas_username,
+                                cas_login_data.cas_password
+                            )
+                            print("[同步] ✓ 通知同步完成")
+                            logger.info("✓ 通知同步完成")
+                        except Exception as e:
+                            print(f"[同步] ✗ 通知同步失败: {str(e)}")
+                            logger.error(f"✗ 通知同步失败: {str(e)}", exc_info=True)
+                        
+                        print(f"\n[同步] 用户 {user.username} 的全面同步完成\n")
+                        logger.info(f"用户 {user.username} 的全面同步完成")
+                    finally:
+                        sync_db.close()
+                except Exception as e:
+                    print(f"[同步] ✗ 全面同步过程中发生错误: {str(e)}")
+                    logger.error(f"全面同步过程中发生错误: {str(e)}", exc_info=True)
+            
+            # 启动后台同步线程
+            sync_thread = threading.Thread(target=sync_all_data, daemon=True)
+            sync_thread.start()
+            print(f"[CAS登录] 已启动后台同步线程，用户 {user.username} 的登录响应立即返回")
+            logger.info(f"已启动后台同步线程，用户 {user.username} 的登录响应立即返回")
+            
             return jsonify({
                 "access_token": access_token, 
                 "token_type": "bearer",
@@ -239,7 +332,8 @@ def login_with_cas():
                     "username": user.username,
                     "cas_username": user.cas_username,
                     "cas_is_bound": user.cas_is_bound
-                }
+                },
+                "sync_started": True  # 指示同步已开始
             })
             
         finally:

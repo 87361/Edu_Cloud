@@ -164,8 +164,15 @@ class AssignmentListInterface(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # 过滤掉已提交的作业，只显示待办作业
-        pending_assignments = [a for a in self._assignments if not a.is_submitted()]
+        # 过滤掉已提交的作业和无效的课程名称（未分类、待办事项、未知课程等）
+        pending_assignments = [
+            a for a in self._assignments 
+            if not a.is_submitted() 
+            and a.course_name 
+            and "未分类" not in a.course_name 
+            and "待办事项" not in a.course_name
+            and a.course_name != "未知课程"
+        ]
 
         if not pending_assignments:
             empty_label = BodyLabel("暂无待办作业", self.task_container)
@@ -206,9 +213,12 @@ class AssignmentListInterface(QWidget):
         Args:
             assignment: 作业对象
         """
+        # 先显示基础信息（从列表获取的）
         self.assignment_detail.update_data(assignment)
         # 切换堆叠页面到作业详情
         self.right_stack.setCurrentIndex(2)
+        # 然后异步加载完整的详情（包括description）
+        self.assignment_detail.load_assignment(assignment.id)
 
     def _show_course_wall(self) -> None:
         """显示课程墙"""
@@ -278,20 +288,25 @@ class AssignmentListInterface(QWidget):
     def _sync_with_bound_account(self, cas_password: str) -> None:
         """使用已绑定账户同步"""
         # 显示加载提示
-        InfoBar.info("提示", "正在同步作业，请稍候...", duration=3000, parent=self)
+        InfoBar.info("提示", "正在同步课程和作业，请稍候...", duration=3000, parent=self)
         
         def sync_func():
             try:
-                return self.assignment_service.sync_assignments(
+                return self.assignment_service.sync_all(
                     cas_password=cas_password
                 )
             except Exception as e:
                 self.assignment_service.load_failed.emit(str(e))
                 raise
 
-        def on_success(result: tuple[str, int, int]):
-            msg, new_count, total = result
+        def on_success(result: tuple[str, dict]):
+            msg, stats = result
+            # 从统计信息中提取作业数量用于显示
+            assignment_stats = stats.get("assignments", {})
+            new_count = assignment_stats.get("new_added", 0)
+            total = assignment_stats.get("total_fetched", 0)
             self._on_sync_success(msg, new_count, total)
+            # 注意：课程墙的刷新已经在 _on_sync_success 中处理了
 
         self.async_service.execute_async(
             sync_func, on_success, self._on_sync_failed
@@ -300,19 +315,23 @@ class AssignmentListInterface(QWidget):
     def _on_sync_confirm(self, username: str, password: str) -> None:
         """确认同步"""
         # 显示加载提示
-        InfoBar.info("提示", "正在同步作业，请稍候...", duration=3000, parent=self)
+        InfoBar.info("提示", "正在同步课程和作业，请稍候...", duration=3000, parent=self)
         
         def sync_func():
             try:
-                return self.assignment_service.sync_assignments(
+                return self.assignment_service.sync_all(
                     username, password
                 )
             except Exception as e:
                 self.assignment_service.load_failed.emit(str(e))
                 raise
 
-        def on_success(result: tuple[str, int, int]):
-            msg, new_count, total = result
+        def on_success(result: tuple[str, dict]):
+            msg, stats = result
+            # 从统计信息中提取作业数量用于显示
+            assignment_stats = stats.get("assignments", {})
+            new_count = assignment_stats.get("new_added", 0)
+            total = assignment_stats.get("total_fetched", 0)
             self._on_sync_success(msg, new_count, total)
 
         self.async_service.execute_async(
@@ -321,9 +340,12 @@ class AssignmentListInterface(QWidget):
 
     def _on_sync_success(self, msg: str, new_count: int, total: int) -> None:
         """同步成功"""
-        InfoBar.success("成功", msg, duration=2000, parent=self)
-        # 刷新列表
-        self._load_assignments()
+        InfoBar.success("成功", msg, duration=3000, parent=self)
+        # 刷新列表（延迟一小段时间确保后端已完成数据库更新）
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(500, self._load_assignments)
+        # 同时刷新课程墙（因为同步操作会更新课程数据）
+        QTimer.singleShot(500, self.course_wall._load_courses)
 
     def _on_sync_failed(self, error_msg: str) -> None:
         """同步失败"""

@@ -1,6 +1,6 @@
 """统一异步处理服务"""
 from typing import Any, Callable, Optional, TypeVar
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, QThread, pyqtSignal, Qt
 
 T = TypeVar("T")
 
@@ -74,10 +74,11 @@ class AsyncService(QObject):
         self._worker.finished.connect(self._on_finished)
         self._worker.error.connect(self._on_error)
 
+        # 使用QueuedConnection确保回调在主线程中执行
         if on_success:
-            self._worker.finished.connect(on_success)
+            self._worker.finished.connect(on_success, Qt.ConnectionType.QueuedConnection)
         if on_error:
-            self._worker.error.connect(on_error)
+            self._worker.error.connect(on_error, Qt.ConnectionType.QueuedConnection)
 
         # 启动线程
         self._thread.start()
