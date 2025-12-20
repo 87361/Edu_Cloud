@@ -12,3 +12,5 @@ wheels/
 app.db
 app.db-shm
 app.db-wal
+
+config

@@ -10,9 +10,13 @@ from src.edu_cloud.common.database import engine, Base, SessionLocal
 from src.edu_cloud.common.token_manager import is_token_revoked
 from src.edu_cloud.user.api import user_bp
 # 导入模型以确保表被创建
-from src.edu_cloud.user import models  # 这会导入User和TokenBlacklist模型
+from src.edu_cloud.user.models import *  # 这会导入User和TokenBlacklist模型
+from src.edu_cloud.notification.models import *
+from src.edu_cloud.discussion.models import *
+from src.edu_cloud.course.models import *
+from src.edu_cloud.assignment.models import *
 
-from src.edu_cloud.course.api import course_bp 
+from src.edu_cloud.course.api import course_bp
 from src.edu_cloud.discussion.api import discussion_bp
 from src.edu_cloud.notification.api import notification_bp
 
