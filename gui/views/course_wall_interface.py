@@ -17,6 +17,7 @@ from ..models.course import Course
 from ..services.course_service import CourseService
 from ..services.async_service import AsyncService
 from ..services.auth_service import AuthService
+from ..api_client import api_client
 from .components.course_card import CourseCard
 from .components.sync_dialog import SyncDialog
 
@@ -38,6 +39,7 @@ class CourseWallInterface(QWidget):
         self.async_service = AsyncService()
         self.auth_service = AuthService()
         self._courses: list[Course] = []
+        self._course_cards: dict[str, CourseCard] = {}  # 存储课程卡片，key为课程名称
         self._setup_ui()
         self._connect_signals()
         self._load_courses()
@@ -105,7 +107,10 @@ class CourseWallInterface(QWidget):
     def _on_courses_loaded(self, courses: list[Course]) -> None:
         """课程列表加载成功"""
         self._courses = courses
+        # 先显示课程卡片（使用临时进度），然后异步加载作业完成率
         self._update_course_wall()
+        # 异步计算每个课程的作业完成率
+        self._calculate_course_progress()
 
     def _on_load_failed(self, error_msg: str) -> None:
         """加载失败"""
@@ -124,6 +129,9 @@ class CourseWallInterface(QWidget):
         for widget in widgets_to_remove:
             self.flow_layout.removeWidget(widget)
             widget.deleteLater()
+        
+        # 清空课程卡片字典（因为widget已被删除）
+        self._course_cards.clear()
 
         if not self._courses:
             empty_label = BodyLabel("暂无课程，请先同步课程", self.course_container)
@@ -141,14 +149,15 @@ class CourseWallInterface(QWidget):
             "#008272",  # 青色
         ]
 
-        # 显示课程卡片
+        # 显示课程卡片（先使用None进度，表示正在计算）
+        self._course_cards = {}  # 存储课程卡片，key为课程名称
         for idx, course in enumerate(self._courses):
             color = colors[idx % len(colors)]
-            # 暂时使用固定进度，后续可以从作业完成情况计算
-            progress = 0.5  # 默认50%
-            card = CourseCard(course, progress, color, self.course_container)
+            # 初始显示为None（会显示"---"），等待作业数据加载后更新
+            card = CourseCard(course, progress=None, color_hex=color, parent=self.course_container)
             card.clicked.connect(self.course_clicked.emit)
             self.flow_layout.addWidget(card)
+            self._course_cards[course.name] = card
 
     def _on_sync_click(self) -> None:
         """同步按钮点击"""
@@ -279,4 +288,68 @@ class CourseWallInterface(QWidget):
     def _on_sync_failed(self, error_msg: str) -> None:
         """同步失败"""
         InfoBar.error("错误", error_msg, duration=2000, parent=self)
+    
+    def _calculate_course_progress(self) -> None:
+        """异步计算每个课程的作业完成率"""
+        if not self._courses:
+            return
+        
+        def calculate_func():
+            """计算所有课程的作业完成率"""
+            course_progress = {}
+            # 获取所有作业
+            try:
+                all_assignments = api_client.get_assignments()
+            except Exception as e:
+                print(f"获取作业列表失败: {e}")
+                return course_progress
+            
+            # 按课程名称分组统计
+            for course in self._courses:
+                course_name = course.name
+                # 获取该课程的所有作业
+                course_assignments = [
+                    a for a in all_assignments 
+                    if a.get("course_name") == course_name
+                ]
+                
+                if not course_assignments:
+                    # 没有作业，进度为None
+                    course_progress[course_name] = None
+                else:
+                    # 计算完成率
+                    total = len(course_assignments)
+                    completed = sum(1 for a in course_assignments if a.get("status") == "已提交")
+                    progress = completed / total if total > 0 else 0.0
+                    course_progress[course_name] = progress
+            
+            return course_progress
+        
+        def on_success(progress_dict: dict):
+            """更新课程卡片的进度"""
+            for course_name, progress in progress_dict.items():
+                if course_name in self._course_cards:
+                    card = self._course_cards[course_name]
+                    # 更新进度显示
+                    if progress is None:
+                        # 没有作业
+                        card.progress_lbl.setText("进度 ---")
+                        card.progress_bar.setVisible(False)
+                    else:
+                        # 有作业，显示完成率
+                        card.progress_lbl.setText(f"进度 {int(progress*100)}%")
+                        card.progress_bar.setValue(int(progress * 100))
+                        card.progress_bar.setVisible(True)
+        
+        def on_error(error_msg: str):
+            """计算失败时的处理"""
+            print(f"计算课程进度失败: {error_msg}")
+            # 失败时，所有课程显示"---"
+            for card in self._course_cards.values():
+                card.progress_lbl.setText("进度 ---")
+                card.progress_bar.setVisible(False)
+        
+        self.async_service.execute_async(
+            calculate_func, on_success, on_error
+        )
 
