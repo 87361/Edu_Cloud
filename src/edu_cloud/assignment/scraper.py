@@ -146,9 +146,9 @@ class AssignmentScraper:
         
         all_data = {} # 使用字典去重: key=unique_key, value=ScrapedAssignmentData
         
-        # 2. 先抓待办 (速度快)
-        for item in self._fetch_undone():
-            all_data[item.unique_key] = item
+        # # 2. 先抓待办 (速度快)
+        # for item in self._fetch_undone():
+        #     all_data[item.unique_key] = item
             
         # 3. 再抓课程详情 (数据全)
         courses = self._fetch_courses()
