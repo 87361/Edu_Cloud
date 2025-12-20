@@ -36,7 +36,7 @@ class LoginView(ctk.CTkFrame):
         # 标题
         title_label = ctk.CTkLabel(
             content_frame,
-            text="云邮教学空间",
+            text="云邮Mini",
             font=ctk.CTkFont(size=32, weight="bold")
         )
         title_label.grid(row=0, column=0, pady=(30, 10))

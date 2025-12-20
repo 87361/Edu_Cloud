@@ -157,6 +157,16 @@ class APIClient:
         """
         return self._make_request("GET", "/api/user/me")
     
+    def get_cas_status(self) -> Dict[str, Any]:
+        """
+        获取当前用户的CAS绑定状态
+        
+        Returns:
+            CAS绑定状态信息
+        """
+        response = self._make_request("GET", "/api/user/me/cas-status")
+        return response.get("data", {})
+    
     def logout(self) -> Dict[str, Any]:
         """
         登出
@@ -183,21 +193,25 @@ class APIClient:
         response = self._make_request("GET", "/api/assignment/")
         return response.get("data", [])
     
-    def sync_assignments(self, school_username: str, school_password: str) -> Dict[str, Any]:
+    def sync_assignments(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
         """
         同步作业（从学校系统抓取）
         
         Args:
-            school_username: 学校账号（学号）
-            school_password: 学校密码
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
         
         Returns:
             同步结果（包含新增和更新数量）
         """
-        data = {
-            "school_username": school_username,
-            "school_password": school_password
-        }
+        data = {}
+        if school_username:
+            data["school_username"] = school_username
+        if school_password:
+            data["school_password"] = school_password
+        if cas_password:
+            data["cas_password"] = cas_password
         return self._make_request("POST", "/api/assignment/sync", data=data)
     
     def submit_assignment(self, assignment_id: int, file_path: str) -> Dict[str, Any]:
@@ -227,6 +241,226 @@ class APIClient:
             raise APIError(f"文件不存在: {file_path}")
         except Exception as e:
             raise APIError(f"读取文件失败: {str(e)}")
+    
+    # ==================== 课程相关API ====================
+    
+    def get_courses(self) -> List[Dict[str, Any]]:
+        """
+        获取当前用户的课程列表
+        
+        Returns:
+            课程列表
+        """
+        response = self._make_request("GET", "/api/course/")
+        return response.get("data", [])
+    
+    def get_course_detail(self, course_id: int) -> Dict[str, Any]:
+        """
+        获取课程详情
+        
+        Args:
+            course_id: 课程ID
+        
+        Returns:
+            课程详情
+        """
+        response = self._make_request("GET", f"/api/course/{course_id}")
+        return response.get("data", {})
+    
+    def get_course_resources(self, course_id: int) -> List[Dict[str, Any]]:
+        """
+        获取课程资源列表
+        
+        Args:
+            course_id: 课程ID
+        
+        Returns:
+            资源列表
+        """
+        response = self._make_request("GET", f"/api/course/{course_id}/resources")
+        return response.get("data", [])
+    
+    def sync_courses(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
+        """
+        同步课程（从学校系统抓取）
+        
+        Args:
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
+        
+        Returns:
+            同步结果
+        """
+        data = {}
+        if school_username:
+            data["school_username"] = school_username
+        if school_password:
+            data["school_password"] = school_password
+        if cas_password:
+            data["cas_password"] = cas_password
+        return self._make_request("POST", "/api/course/sync", data=data)
+    
+    # ==================== 讨论相关API ====================
+    
+    def get_course_discussions(self, course_id: int) -> List[Dict[str, Any]]:
+        """
+        获取课程讨论列表
+        
+        Args:
+            course_id: 课程ID
+        
+        Returns:
+            讨论列表
+        """
+        response = self._make_request("GET", "/api/discussion/list", data={"course_id": course_id})
+        return response.get("data", [])
+    
+    def get_discussion_detail(self, topic_id: int) -> Dict[str, Any]:
+        """
+        获取讨论详情和回复
+        
+        Args:
+            topic_id: 讨论主题ID
+        
+        Returns:
+            讨论详情和回复列表
+        """
+        response = self._make_request("GET", f"/api/discussion/{topic_id}")
+        return response.get("data", {})
+    
+    def sync_discussions(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
+        """
+        同步讨论（从学校系统抓取）
+        
+        Args:
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
+        
+        Returns:
+            同步结果
+        """
+        data = {}
+        if school_username:
+            data["school_username"] = school_username
+        if school_password:
+            data["school_password"] = school_password
+        if cas_password:
+            data["cas_password"] = cas_password
+        return self._make_request("POST", "/api/discussion/sync", data=data)
+    
+    # ==================== 公告相关API ====================
+    
+    def get_notifications(self) -> List[Dict[str, Any]]:
+        """
+        获取公告列表
+        
+        Returns:
+            公告列表
+        """
+        response = self._make_request("GET", "/api/notification/")
+        return response.get("data", [])
+    
+    def sync_notifications(self, school_username: str = None, school_password: str = None, cas_password: str = None) -> Dict[str, Any]:
+        """
+        同步公告（从学校系统抓取）
+        
+        Args:
+            school_username: 学校账号（学号），如果为None则使用已绑定账户
+            school_password: 学校密码，如果为None则使用已绑定账户
+            cas_password: CAS密码（用于验证已绑定账户）
+        
+        Returns:
+            同步结果
+        """
+        data = {}
+        if school_username:
+            data["school_username"] = school_username
+        if school_password:
+            data["school_password"] = school_password
+        if cas_password:
+            data["cas_password"] = cas_password
+        return self._make_request("POST", "/api/notification/sync", data=data)
+    
+    # ==================== 管理员相关API ====================
+    
+    def get_admin_stats(self) -> Dict[str, Any]:
+        """
+        获取管理员统计信息
+        
+        Returns:
+            统计信息
+        """
+        response = self._make_request("GET", "/api/admin/database/stats")
+        return response.get("data", {})
+    
+    def get_admin_users(
+        self, 
+        limit: int = 100, 
+        offset: int = 0, 
+        role: Optional[str] = None, 
+        is_active: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """
+        获取用户列表（管理员）
+        
+        Args:
+            limit: 返回记录数
+            offset: 偏移量
+            role: 按角色筛选（'user' 或 'admin'）
+            is_active: 按活跃状态筛选
+        
+        Returns:
+            用户列表和总数
+        """
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
+        if role:
+            params["role"] = role
+        if is_active is not None:
+            params["is_active"] = "true" if is_active else "false"
+        
+        # GET请求使用params参数（query string），不是data（body）
+        response = self._make_request("GET", "/api/admin/users", data=params)
+        return response.get("data", {})
+    
+    def get_admin_database_tables(self) -> Dict[str, Any]:
+        """
+        获取数据库表列表（管理员）
+        
+        Returns:
+            表列表和结构信息
+        """
+        response = self._make_request("GET", "/api/admin/database/tables")
+        return response.get("data", {})
+    
+    def get_admin_table_data(
+        self, 
+        table_name: str, 
+        limit: int = 100, 
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        获取表数据（管理员）
+        
+        Args:
+            table_name: 表名
+            limit: 返回记录数
+            offset: 偏移量
+        
+        Returns:
+            表数据
+        """
+        params = {
+            "limit": limit,
+            "offset": offset
+        }
+        # GET请求使用params参数（query string），不是data（body）
+        response = self._make_request("GET", f"/api/admin/database/table/{table_name}", data=params)
+        return response.get("data", {})
 
 # 全局API客户端实例
 api_client = APIClient()

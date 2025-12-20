@@ -18,18 +18,36 @@ def sync_assignments():
     current_username = get_jwt_identity()
     req_data = request.get_json() or {}
     
-    # 优先用前端传的，其次用临时的
-    s_user = req_data.get("school_username") or TEMP_SCHOOL_USERNAME
-    s_pass = req_data.get("school_password") or TEMP_SCHOOL_PASSWORD
-    
-    if not s_user or not s_pass:
-        return jsonify({"error": "缺少学校账号密码"}), 400
-        
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == current_username).first()
         if not user:
             return jsonify({"error": "本地用户不存在"}), 404
+        
+        # 如果用户已绑定CAS且未提供完整账号密码，尝试使用已绑定账户
+        if user.cas_is_bound and user.cas_username:
+            if not req_data.get("school_username") and not req_data.get("school_password"):
+                # 使用已绑定账户，但需要提供密码验证
+                if req_data.get("cas_password"):
+                    s_user = user.cas_username
+                    s_pass = req_data.get("cas_password")
+                else:
+                    return jsonify({
+                        "error": "请提供CAS密码以验证身份",
+                        "requires_password": True,
+                        "cas_username": user.cas_username
+                    }), 400
+            else:
+                # 提供了账号密码，使用提供的
+                s_user = req_data.get("school_username") or user.cas_username
+                s_pass = req_data.get("school_password") or req_data.get("cas_password")
+        else:
+            # 未绑定CAS，必须提供账号密码
+            s_user = req_data.get("school_username") or TEMP_SCHOOL_USERNAME
+            s_pass = req_data.get("school_password") or TEMP_SCHOOL_PASSWORD
+        
+        if not s_user or not s_pass:
+            return jsonify({"error": "缺少学校账号密码"}), 400
             
         # 🟢 调用 Service 层处理业务
         added, updated, total = AssignmentService.sync_assignments(db, user.id, s_user, s_pass)

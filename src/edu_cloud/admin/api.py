@@ -35,7 +35,18 @@ def get_database_tables(current_user):
     """
     获取所有数据库表列表
     需要管理员权限
+    
+    注意：敏感字段（如密码）会被标记，但不会在数据查看时返回
     """
+    # 定义敏感字段列表
+    SENSITIVE_FIELDS = {
+        'hashed_password',
+        'cas_password_encrypted',
+        'password',
+        'password_hash',
+        'password_encrypted'
+    }
+    
     try:
         inspector = inspect(engine)
         tables = inspector.get_table_names()
@@ -43,23 +54,28 @@ def get_database_tables(current_user):
         table_info = []
         for table_name in tables:
             columns = inspector.get_columns(table_name)
+            column_info = []
+            for col in columns:
+                col_name = col["name"]
+                is_sensitive = col_name.lower() in SENSITIVE_FIELDS
+                column_info.append({
+                    "name": col_name,
+                    "type": str(col["type"]),
+                    "nullable": col.get("nullable", True),
+                    "default": str(col.get("default", "")) if col.get("default") else None,
+                    "sensitive": is_sensitive  # 标记是否为敏感字段
+                })
+            
             table_info.append({
                 "name": table_name,
-                "columns": [
-                    {
-                        "name": col["name"],
-                        "type": str(col["type"]),
-                        "nullable": col.get("nullable", True),
-                        "default": str(col.get("default", "")) if col.get("default") else None
-                    }
-                    for col in columns
-                ],
+                "columns": column_info,
                 "column_count": len(columns)
             })
         
         return jsonify(success_response({
             "tables": table_info,
-            "table_count": len(tables)
+            "table_count": len(tables),
+            "note": "Sensitive fields (passwords) are marked but will not be returned when viewing table data"
         }))
         
     except Exception as e:
@@ -133,10 +149,21 @@ def get_table_data(current_user, table_name: str):
     获取指定表的数据
     需要管理员权限
     
+    注意：敏感字段（如密码哈希）会被自动过滤，不会返回
+    
     Query参数:
     - limit: 限制返回的记录数（默认100，最大1000）
     - offset: 偏移量（默认0）
     """
+    # 定义敏感字段列表（这些字段不会被返回）
+    SENSITIVE_FIELDS = {
+        'hashed_password',
+        'cas_password_encrypted',
+        'password',  # 通用密码字段
+        'password_hash',
+        'password_encrypted'
+    }
+    
     try:
         # 安全检查：只允许查询已知的表
         inspector = inspect(engine)
@@ -151,8 +178,19 @@ def get_table_data(current_user, table_name: str):
         
         db = SessionLocal()
         try:
-            # 动态查询表数据
-            result = db.execute(text(f"SELECT * FROM {table_name} LIMIT :limit OFFSET :offset"), {
+            # 获取表的所有列名
+            columns_info = inspector.get_columns(table_name)
+            all_columns = [col['name'] for col in columns_info]
+            
+            # 过滤掉敏感字段
+            safe_columns = [col for col in all_columns if col.lower() not in SENSITIVE_FIELDS]
+            
+            if not safe_columns:
+                return error_response("No accessible columns in this table", 403)
+            
+            # 构建SELECT语句，只选择非敏感字段
+            columns_str = ', '.join(safe_columns)
+            result = db.execute(text(f"SELECT {columns_str} FROM {table_name} LIMIT :limit OFFSET :offset"), {
                 "limit": limit,
                 "offset": offset
             })
@@ -177,14 +215,24 @@ def get_table_data(current_user, table_name: str):
             count_result = db.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
             total = count_result.scalar()
             
-            return jsonify(success_response({
+            # 记录被过滤的字段
+            filtered_fields = [col for col in all_columns if col.lower() in SENSITIVE_FIELDS]
+            
+            response_data = {
                 "table_name": table_name,
                 "data": data,
                 "total": total,
                 "limit": limit,
                 "offset": offset,
                 "has_more": offset + len(data) < total
-            }))
+            }
+            
+            # 如果有字段被过滤，在响应中说明
+            if filtered_fields:
+                response_data["filtered_fields"] = filtered_fields
+                response_data["note"] = "Sensitive fields (passwords) have been filtered for security"
+            
+            return jsonify(success_response(response_data))
             
         finally:
             db.close()

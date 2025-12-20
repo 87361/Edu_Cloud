@@ -1,117 +1,134 @@
-"""
-GUI应用主入口
-管理窗口切换和事件循环
-"""
-import customtkinter as ctk
-from typing import Optional
-from .views.login_view import LoginView
-from .views.assignment_list_view import AssignmentListView
-from .views.assignment_detail_view import AssignmentDetailView
-from .utils.token_manager import token_manager
-from .api_client import api_client
+"""GUI应用主入口"""
+import sys
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QApplication
 
-class EduCloudApp(ctk.CTk):
-    """教育云应用主窗口"""
-    
+from qfluentwidgets import setTheme, Theme
+
+from .views.login_window import LoginWindow
+from .views.main_window import MainWindow
+from .services.auth_service import AuthService
+from .utils.token_manager import token_manager
+
+
+class EduCloudApp:
+    """教育云应用"""
+
     def __init__(self):
-        super().__init__()
-        
-        # 设置窗口
-        self.title("云邮教学空间")
-        self.geometry("1000x700")
-        self.minsize(800, 600)
-        
-        # 设置主题
-        ctk.set_appearance_mode("light")  # 可选: "light", "dark", "system"
-        ctk.set_default_color_theme("blue")  # 可选: "blue", "green", "dark-blue"
-        
-        # 当前视图
-        self.current_view: Optional[ctk.CTkFrame] = None
-        
+        """初始化应用"""
+        # 设置高DPI支持
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+
+        self.app = QApplication(sys.argv)
+
+        # 设置主题 - 从配置文件读取，如果没有则使用默认值
+        from qfluentwidgets import qconfig
+        try:
+            # 读取配置的主题模式
+            theme_mode = qconfig.themeMode.value
+            if isinstance(theme_mode, Theme):
+                setTheme(theme_mode)
+            elif isinstance(theme_mode, int):
+                theme_map = {0: Theme.LIGHT, 1: Theme.DARK, 2: Theme.AUTO}
+                setTheme(theme_map.get(theme_mode, Theme.AUTO))
+            else:
+                setTheme(Theme.AUTO)  # 默认跟随系统
+        except:
+            # 如果读取失败，使用默认值
+            setTheme(Theme.AUTO)
+
+        self.auth_service = AuthService()
+
         # 检查是否已登录
         if token_manager.get_token():
-            self.show_assignment_list()
+            # 获取用户信息判断角色（使用数据库中的role字段）
+            try:
+                user = self.auth_service.get_current_user()
+                if user and user.role == 'admin':
+                    # 管理员账户，显示管理员窗口
+                    self._show_admin_window()
+                elif user:
+                    # 普通用户，显示主窗口
+                    self._show_main_window()
+                else:
+                    # Token无效或已过期，清除token并显示登录窗口
+                    token_manager.clear_token()
+                    self._show_login_window()
+            except Exception as e:
+                # 获取用户信息失败，清除token并显示登录窗口
+                import logging
+                logging.error(f"获取用户信息失败: {e}")
+                token_manager.clear_token()
+                self._show_login_window()
         else:
-            self.show_login()
-    
-    def clear_current_view(self):
-        """清除当前视图"""
-        if self.current_view:
-            self.current_view.destroy()
-            self.current_view = None
-    
-    def show_login(self):
-        """显示登录界面"""
-        self.clear_current_view()
-        
-        login_view = LoginView(self, on_login_success=self.on_login_success)
-        login_view.grid(row=0, column=0, sticky="nsew")
-        
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        
-        self.current_view = login_view
-    
-    def show_assignment_list(self):
-        """显示作业列表界面"""
-        self.clear_current_view()
-        
-        assignment_list_view = AssignmentListView(
-            self,
-            on_assignment_click=self.on_assignment_click,
-            on_logout=self.on_logout
-        )
-        assignment_list_view.grid(row=0, column=0, sticky="nsew")
-        
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        
-        self.current_view = assignment_list_view
-    
-    def show_assignment_detail(self, assignment_id: int):
-        """显示作业详情界面"""
-        self.clear_current_view()
-        
-        assignment_detail_view = AssignmentDetailView(
-            self,
-            assignment_id=assignment_id,
-            on_back=self.on_back_to_list
-        )
-        assignment_detail_view.grid(row=0, column=0, sticky="nsew")
-        
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        
-        self.current_view = assignment_detail_view
-    
-    def on_login_success(self):
-        """登录成功回调"""
-        self.show_assignment_list()
-    
-    def on_logout(self):
-        """登出回调"""
-        try:
-            api_client.logout()
-        except:
-            pass  # 即使API调用失败，也清除本地Token
-        
-        token_manager.clear_token()
-        self.show_login()
-    
-    def on_assignment_click(self, assignment_id: int):
-        """点击作业项回调"""
-        self.show_assignment_detail(assignment_id)
-    
-    def on_back_to_list(self):
-        """返回作业列表回调"""
-        self.show_assignment_list()
+            self._show_login_window()
 
-def main():
+    def _show_login_window(self) -> None:
+        """显示登录窗口"""
+        self.login_window = LoginWindow()
+        self.login_window.login_success.connect(self._on_login_success)
+        self.login_window.show()
+
+    def _show_main_window(self) -> None:
+        """显示主窗口"""
+        self.main_window = MainWindow()
+        # 连接登出信号
+        self.main_window.logout_requested.connect(self._on_logout_requested)
+        self.main_window.show()
+
+    def _show_admin_window(self) -> None:
+        """显示管理员窗口"""
+        from .views.admin_window import AdminWindow
+        self.admin_window = AdminWindow()
+        # 连接登出信号
+        self.admin_window.logout_requested.connect(self._on_logout_requested)
+        self.admin_window.show()
+
+    def _on_login_success(self) -> None:
+        """登录成功"""
+        if hasattr(self, "login_window"):
+            self.login_window.close()
+        
+        # 获取用户信息，根据数据库中的role字段判断角色
+        try:
+            user = self.auth_service.get_current_user()
+            if user and user.role == 'admin':
+                # 管理员账户，显示管理员窗口
+                self._show_admin_window()
+            else:
+                # 普通用户，显示主窗口
+                self._show_main_window()
+        except Exception as e:
+            import logging
+            logging.error(f"登录后获取用户信息失败: {e}")
+            # 如果获取失败，默认显示主窗口
+            self._show_main_window()
+
+    def _on_logout_requested(self) -> None:
+        """登出请求"""
+        if hasattr(self, "main_window"):
+            self.main_window.close()
+        if hasattr(self, "admin_window"):
+            self.admin_window.close()
+        self._show_login_window()
+
+    def run(self) -> int:
+        """
+        运行应用
+
+        Returns:
+            退出代码
+        """
+        return self.app.exec()
+
+
+def main() -> None:
     """主函数"""
     app = EduCloudApp()
-    app.mainloop()
+    sys.exit(app.run())
+
 
 if __name__ == "__main__":
     main()
-
-
