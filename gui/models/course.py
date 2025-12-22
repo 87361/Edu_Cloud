@@ -45,3 +45,4 @@ class Course:
             result["description"] = self.description
         return result
 
+

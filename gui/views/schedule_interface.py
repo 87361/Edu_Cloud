@@ -177,3 +177,4 @@ class ScheduleInterface(QWidget):
             card = ScheduleItemCard(time, title, room, color, self.scroll_widget)
             self.scroll_layout.addWidget(card)
 
+

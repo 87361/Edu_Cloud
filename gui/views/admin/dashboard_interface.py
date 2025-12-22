@@ -167,3 +167,4 @@ class DashboardInterface(QWidget):
 
         self.async_service.execute_async(load_func, on_success, lambda e: None)
 
+

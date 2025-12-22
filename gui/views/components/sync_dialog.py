@@ -1,97 +1,100 @@
 """同步作业对话框"""
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PyQt6.QtWidgets import QVBoxLayout, QWidget
 
 from qfluentwidgets import (
-    Dialog,
-    LineEdit,
-    PrimaryPushButton,
-    PushButton,
+    MessageBoxBase,
+    SubtitleLabel,
     BodyLabel,
+    StrongBodyLabel,
+    PasswordLineEdit,
+    PrimaryPushButton,
+    PushButton
 )
 
+class SyncDialog(MessageBoxBase):
+    """
+    同步验证对话框
+    
+    简化逻辑：假设用户已绑定学号，仅需输入密码进行最终确认。
+    """
 
-class SyncDialog(Dialog):
-    """同步对话框（通用，可用于同步课程、作业等）"""
+    # 仅需传回密码，学号通过 self.user 获取或在外部处理
+    confirmed = pyqtSignal(str) 
 
-    confirmed = pyqtSignal(str, str)  # 确认信号 (username, password)
-    use_bound_account = pyqtSignal()  # 使用已绑定账户信号
-
-    def __init__(self, parent=None, user=None, title="同步", description="请输入学校账号信息以同步"):
-        """
-        初始化同步对话框
-
-        Args:
-            parent: 父窗口
-            user: 当前用户对象，用于检查是否已绑定CAS
-            title: 对话框标题
-            description: 对话框描述文本
-        """
-        super().__init__(title, description, parent=parent)
+    def __init__(self, parent=None, user=None):
+        super().__init__(parent)
         self.user = user
+        # 获取学号用于展示，如果没有user对象则显示默认文本
+        self.student_id = getattr(user, 'cas_username', '未知账号') if user else '未知账号'
+        
+        # 初始化界面
         self._setup_ui()
+        
+        # 设置窗口属性
+        self.widget.setMinimumWidth(350)
+        # 允许点击遮罩层关闭 (可选，设为True更像原生弹窗，False更强制)
+        self.yesButton.setText("开始同步")
+        self.cancelButton.setText("取消")
 
-    def _setup_ui(self) -> None:
-        """设置UI"""
-        # 输入框容器
-        input_widget = QWidget()
-        input_layout = QVBoxLayout(input_widget)
-        input_layout.setContentsMargins(0, 0, 0, 0)
-        input_layout.setSpacing(10)
+    def _setup_ui(self):
+        """构建 Win11 风格的简洁 UI"""
+        
+        # 1. 标题 (SubtitleLabel 自带原生字体粗细和大小)
+        self.title_label = SubtitleLabel("身份验证", self.widget)
+        
+        # 2. 提示文本容器
+        self.info_layout = QVBoxLayout()
+        self.info_layout.setSpacing(4)
+        
+        # 说明文字
+        description = BodyLabel("为了确保数据安全，同步教务系统数据需要验证您的密码。", self.widget)
+        description.setWordWrap(True)
+        
+        # 显示当前绑定的账号 (StrongBodyLabel 加粗显示，强调身份)
+        account_info = BodyLabel("当前绑定账号：", self.widget)
+        self.account_label = StrongBodyLabel(self.student_id, self.widget)
+        
+        # 将账号信息横向排列
+        # (这里为了布局简单，直接放在描述下方，也可以用 QHBoxLayout 放在一行)
+        
+        # 3. 密码输入框 (使用 PasswordLineEdit，自带小眼睛图标)
+        self.password_edit = PasswordLineEdit(self.widget)
+        self.password_edit.setPlaceholderText("请输入教务系统密码")
+        self.password_edit.setClearButtonEnabled(True)
 
-        # 学号输入
-        self.username_edit = LineEdit()
-        self.username_edit.setPlaceholderText("请输入学号")
-        input_layout.addWidget(self.username_edit)
+        # --- 组装布局 ---
+        # MessageBoxBase 使用 viewLayout 来管理中间区域的内容
+        self.viewLayout.addWidget(self.title_label)
+        self.viewLayout.addSpacing(10)
+        self.viewLayout.addWidget(description)
+        self.viewLayout.addSpacing(10)
+        self.viewLayout.addWidget(account_info)
+        self.viewLayout.addWidget(self.account_label)
+        self.viewLayout.addSpacing(15)
+        self.viewLayout.addWidget(self.password_edit)
+        self.viewLayout.addSpacing(10)
 
-        # 密码输入
-        self.password_edit = LineEdit()
-        self.password_edit.setPlaceholderText("请输入密码")
-        self.password_edit.setEchoMode(LineEdit.EchoMode.Password)
-        input_layout.addWidget(self.password_edit)
-
-        self.vBoxLayout.addWidget(input_widget, 0, Qt.AlignmentFlag.AlignTop)
-
-        # 按钮
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-
-        # 如果用户已绑定CAS，添加"使用已绑定账户"选项
-        if self.user and self.user.cas_is_bound:
-            self.use_bound_button = PushButton("使用已绑定账户")
-            self.use_bound_button.clicked.connect(self._on_use_bound_account)
-            button_layout.addWidget(self.use_bound_button)
-
-        self.confirm_button = PrimaryPushButton("确认")
-        self.confirm_button.clicked.connect(self._on_confirm)
-        button_layout.addWidget(self.confirm_button)
-
-        self.cancel_button = PushButton("取消")
-        self.cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(self.cancel_button)
-
-        self.vBoxLayout.addLayout(button_layout, 0)
-
-        # 绑定回车键
-        self.username_edit.returnPressed.connect(self.password_edit.setFocus)
+        # --- 信号绑定 ---
+        # 绑定回车键直接提交
         self.password_edit.returnPressed.connect(self._on_confirm)
+        
+        # 覆盖父类的按钮点击事件
+        self.yesButton.clicked.connect(self._on_confirm)
+        self.cancelButton.clicked.connect(self.reject)
 
-        # 设置焦点
-        self.username_edit.setFocus()
+        # 自动聚焦密码框
+        self.password_edit.setFocus()
 
-    def _on_confirm(self) -> None:
-        """确认按钮点击"""
-        username = self.username_edit.text().strip()
+    def _on_confirm(self):
+        """处理确认逻辑"""
         password = self.password_edit.text().strip()
 
-        if not username or not password:
+        if not password:
+            # 如果密码为空，可以让输入框抖动或变红 (这里简单处理为聚焦)
+            self.password_edit.setFocus()
             return
 
-        self.confirmed.emit(username, password)
+        # 发送信号
+        self.confirmed.emit(password)
         self.accept()
-
-    def _on_use_bound_account(self) -> None:
-        """使用已绑定账户"""
-        self.use_bound_account.emit()
-        self.accept()
-

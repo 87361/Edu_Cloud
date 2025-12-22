@@ -1,7 +1,7 @@
 """课程墙界面"""
 from typing import Optional
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QApplication
 
 from qfluentwidgets import (
     ScrollArea,
@@ -11,10 +11,12 @@ from qfluentwidgets import (
     InfoBar,
     PrimaryPushButton,
     PushButton,
+    FluentWindow,
 )
 
 from ..models.course import Course
 from ..services.course_service import CourseService
+from ..services.assignment_service import AssignmentService
 from ..services.async_service import AsyncService
 from ..services.auth_service import AuthService
 from ..api_client import api_client
@@ -26,6 +28,7 @@ class CourseWallInterface(QWidget):
     """课程墙界面"""
 
     course_clicked = pyqtSignal(Course)  # 课程点击信号
+    sync_completed = pyqtSignal()  # 同步完成信号，用于通知父组件刷新作业列表
 
     def __init__(self, parent=None):
         """
@@ -36,6 +39,7 @@ class CourseWallInterface(QWidget):
         """
         super().__init__(parent)
         self.course_service = CourseService()
+        self.assignment_service = AssignmentService()
         self.async_service = AsyncService()
         self.auth_service = AuthService()
         self._courses: list[Course] = []
@@ -57,7 +61,7 @@ class CourseWallInterface(QWidget):
         title_layout.addStretch(1)
         
         # 同步按钮
-        self.sync_button = PrimaryPushButton("同步课程", self)
+        self.sync_button = PrimaryPushButton("同步", self)
         self.sync_button.clicked.connect(self._on_sync_click)
         title_layout.addWidget(self.sync_button)
         
@@ -88,8 +92,6 @@ class CourseWallInterface(QWidget):
         """连接信号"""
         self.course_service.courses_loaded.connect(self._on_courses_loaded)
         self.course_service.load_failed.connect(self._on_load_failed)
-        self.course_service.sync_success.connect(self._on_sync_success)
-        self.course_service.sync_failed.connect(self._on_sync_failed)
 
     def _load_courses(self) -> None:
         """加载课程列表"""
@@ -163,16 +165,15 @@ class CourseWallInterface(QWidget):
         """同步按钮点击"""
         # 获取当前用户信息
         user = self.auth_service.get_current_user()
-        dialog = SyncDialog(
-            self, 
-            user=user,
-            title="同步课程",
-            description="请输入学校账号信息以同步课程"
-        )
+        if not user or not user.cas_is_bound:
+            InfoBar.error("错误", "未绑定CAS账户，请先绑定账户", duration=2000, parent=self)
+            return
+        
+        dialog = SyncDialog(self, user=user)
         dialog.confirmed.connect(self._on_sync_confirm)
-        dialog.use_bound_account.connect(self._on_use_bound_account)
-        if dialog.exec() == dialog.DialogCode.Accepted:
-            pass  # 对话框已关闭
+        dialog.exec()
+        # 对话框关闭后，修复主窗口和导航栏状态（无论是否真的同步）
+        self._fix_main_window_after_dialog()
 
     def _on_use_bound_account(self) -> None:
         """使用已绑定账户"""
@@ -210,21 +211,21 @@ class CourseWallInterface(QWidget):
         password_input.returnPressed.connect(on_confirm)
         password_input.setFocus()
         
-        if password_dialog.exec() == password_dialog.DialogCode.Accepted:
-            pass
+        password_dialog.exec()
+        # 对话框关闭后，修复主窗口和导航栏状态
+        self._fix_main_window_after_dialog()
 
     def _sync_with_bound_account(self, cas_password: str) -> None:
         """使用已绑定账户同步"""
         # 显示加载提示
-        InfoBar.info("提示", "正在同步课程，请稍候...", duration=3000, parent=self)
+        InfoBar.info("提示", "正在同步所有内容，请稍候...", duration=3000, parent=self)
         
         def sync_func():
             try:
-                return self.course_service.sync_courses(
+                return self.assignment_service.sync_all(
                     cas_password=cas_password
                 )
             except Exception as e:
-                self.course_service.sync_failed.emit(str(e))
                 raise
 
         def on_success(result: tuple[str, dict]):
@@ -235,19 +236,23 @@ class CourseWallInterface(QWidget):
             sync_func, on_success, self._on_sync_failed
         )
 
-    def _on_sync_confirm(self, username: str, password: str) -> None:
+    def _on_sync_confirm(self, password: str) -> None:
         """确认同步"""
+        # 获取当前用户信息
+        user = self.auth_service.get_current_user()
+        if not user or not user.cas_username:
+            InfoBar.error("错误", "无法获取用户信息", duration=2000, parent=self)
+            return
+        
         # 显示加载提示
-        InfoBar.info("提示", "正在同步课程，请稍候...", duration=3000, parent=self)
+        InfoBar.info("提示", "正在同步所有内容，请稍候...", duration=3000, parent=self)
         
         def sync_func():
             try:
-                return self.course_service.sync_courses(
-                    school_username=username,
-                    school_password=password
+                return self.assignment_service.sync_all(
+                    cas_password=password
                 )
             except Exception as e:
-                self.course_service.sync_failed.emit(str(e))
                 raise
 
         def on_success(result: tuple[str, dict]):
@@ -263,20 +268,31 @@ class CourseWallInterface(QWidget):
         # 构建详细的消息
         detail_msg = msg
         if stats:
-            new_courses = stats.get("new_courses", 0)
-            updated_courses = stats.get("updated_courses", 0)
-            total_courses = stats.get("total_courses", 0)
-            new_resources = stats.get("new_resources_added", 0)
+            # 课程统计
+            course_stats = stats.get("courses", {})
+            new_courses = course_stats.get("new_courses", 0)
+            updated_courses = course_stats.get("updated_courses", 0)
+            total_courses = course_stats.get("total_courses", 0)
+            new_resources = course_stats.get("new_resources_added", 0)
+            
+            # 作业统计
+            assignment_stats = stats.get("assignments", {})
+            new_assignments = assignment_stats.get("new_added", 0)
+            total_assignments = assignment_stats.get("total_fetched", 0)
             
             detail_parts = []
             if total_courses > 0:
-                detail_parts.append(f"共{total_courses}门课程")
+                detail_parts.append(f"课程{total_courses}门")
             if new_courses > 0:
-                detail_parts.append(f"新增{new_courses}门")
+                detail_parts.append(f"新增课程{new_courses}门")
             if updated_courses > 0:
-                detail_parts.append(f"更新{updated_courses}门")
+                detail_parts.append(f"更新课程{updated_courses}门")
             if new_resources > 0:
-                detail_parts.append(f"新增{new_resources}个资源")
+                detail_parts.append(f"新增资源{new_resources}个")
+            if total_assignments > 0:
+                detail_parts.append(f"作业{total_assignments}个")
+            if new_assignments > 0:
+                detail_parts.append(f"新增作业{new_assignments}个")
             
             if detail_parts:
                 detail_msg = f"{msg}（{', '.join(detail_parts)}）"
@@ -284,6 +300,84 @@ class CourseWallInterface(QWidget):
         InfoBar.success("成功", detail_msg, duration=3000, parent=self)
         # 刷新课程列表
         self._load_courses()
+        # 通知父组件刷新作业列表
+        self.sync_completed.emit()
+        # 确保主窗口导航栏状态正常（修复同步后主题切换问题）
+        self._ensure_navigation_state()
+
+    def _fix_main_window_after_dialog(self) -> None:
+        """对话框关闭后修复主窗口和导航栏状态"""
+        try:
+            # 获取主窗口（FluentWindow）
+            parent = self.parent()
+            main_window = None
+            while parent is not None:
+                if isinstance(parent, FluentWindow):
+                    main_window = parent
+                    break
+                parent = parent.parent()
+            
+            if main_window is not None:
+                # 立即恢复主窗口焦点和激活状态
+                main_window.activateWindow()
+                main_window.raise_()
+                main_window.setFocus()
+                
+                # 延迟修复导航栏状态，确保对话框完全关闭
+                def fix_navigation():
+                    try:
+                        if hasattr(main_window, 'navigationInterface'):
+                            nav = main_window.navigationInterface
+                            # 确保导航栏样式正确应用
+                            style = nav.style()
+                            if style:
+                                style.unpolish(nav)
+                                style.polish(nav)
+                            # 更新导航栏
+                            nav.update()
+                            nav.repaint()
+                            # 处理事件队列
+                            QApplication.processEvents()
+                    except Exception as e:
+                        print(f"修复导航栏状态失败: {e}")
+                
+                # 延迟100ms执行，确保对话框完全关闭
+                QTimer.singleShot(100, fix_navigation)
+        except Exception as e:
+            print(f"查找主窗口失败: {e}")
+
+    def _ensure_navigation_state(self) -> None:
+        """确保主窗口导航栏状态正常（修复同步后主题切换问题）"""
+        try:
+            # 获取主窗口（FluentWindow）
+            parent = self.parent()
+            main_window = None
+            while parent is not None:
+                if isinstance(parent, FluentWindow):
+                    main_window = parent
+                    break
+                parent = parent.parent()
+            
+            if main_window is not None and hasattr(main_window, 'navigationInterface'):
+                # 延迟执行，确保同步操作完全完成
+                def fix_navigation():
+                    try:
+                        nav = main_window.navigationInterface
+                        # 确保导航栏样式正确应用
+                        nav.style().unpolish(nav)
+                        nav.style().polish(nav)
+                        # 更新导航栏
+                        nav.update()
+                        nav.repaint()
+                        # 处理事件队列
+                        QApplication.processEvents()
+                    except Exception as e:
+                        print(f"修复导航栏状态失败: {e}")
+                
+                # 延迟200ms执行，确保同步操作完全完成
+                QTimer.singleShot(200, fix_navigation)
+        except Exception as e:
+            print(f"查找主窗口失败: {e}")
 
     def _on_sync_failed(self, error_msg: str) -> None:
         """同步失败"""

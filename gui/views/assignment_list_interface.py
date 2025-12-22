@@ -28,7 +28,6 @@ from ..models.course import Course
 from ..services.assignment_service import AssignmentService
 from ..services.async_service import AsyncService
 from ..services.auth_service import AuthService
-from .components.sync_dialog import SyncDialog
 from .assignment_detail_interface import AssignmentDetailInterface
 from .course_wall_interface import CourseWallInterface
 from .course_detail_interface import CourseDetailInterface
@@ -77,10 +76,6 @@ class AssignmentListInterface(QWidget):
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(10)
 
-        self.sync_button = PrimaryPushButton("同步", self.left_panel)
-        self.sync_button.clicked.connect(self._on_sync_click)
-        toolbar_layout.addWidget(self.sync_button)
-
         self.refresh_button = PushButton("刷新", self.left_panel)
         self.refresh_button.clicked.connect(self._load_assignments)
         toolbar_layout.addWidget(self.refresh_button)
@@ -109,6 +104,7 @@ class AssignmentListInterface(QWidget):
         # 页面 0: 课程墙（默认显示）
         self.course_wall = CourseWallInterface()
         self.course_wall.course_clicked.connect(self._show_course_detail)
+        self.course_wall.sync_completed.connect(self._load_assignments)  # 同步完成后刷新作业列表
 
         # 页面 1: 课程详情
         self.course_detail = CourseDetailInterface()
@@ -131,8 +127,6 @@ class AssignmentListInterface(QWidget):
             self._on_assignments_loaded
         )
         self.assignment_service.load_failed.connect(self._on_load_failed)
-        self.assignment_service.sync_success.connect(self._on_sync_success)
-        self.assignment_service.sync_failed.connect(self._on_sync_failed)
 
     def _load_assignments(self) -> None:
         """加载作业列表"""
@@ -236,120 +230,6 @@ class AssignmentListInterface(QWidget):
         self.right_stack.setCurrentIndex(1)
 
 
-    def _on_sync_click(self) -> None:
-        """同步按钮点击"""
-        # 获取当前用户信息
-        user = self.auth_service.get_current_user()
-        dialog = SyncDialog(self, user=user)
-        dialog.confirmed.connect(self._on_sync_confirm)
-        dialog.use_bound_account.connect(self._on_use_bound_account)
-        if dialog.exec() == dialog.DialogCode.Accepted:
-            pass  # 对话框已关闭
-
-    def _on_use_bound_account(self) -> None:
-        """使用已绑定账户"""
-        user = self.auth_service.get_current_user()
-        if not user or not user.cas_is_bound:
-            InfoBar.error("错误", "未绑定CAS账户", duration=2000, parent=self)
-            return
-        
-        # 弹出密码输入框
-        from qfluentwidgets import Dialog, LineEdit, PrimaryPushButton, PushButton
-        password_dialog = Dialog("验证身份", f"请输入CAS密码以验证身份（学号：{user.cas_username}）", self)
-        password_input = LineEdit()
-        password_input.setPlaceholderText("请输入CAS密码")
-        password_input.setEchoMode(LineEdit.EchoMode.Password)
-        password_input.setMinimumWidth(300)
-        password_dialog.vBoxLayout.addWidget(password_input)
-        
-        def on_confirm():
-            password = password_input.text().strip()
-            if not password:
-                return
-            password_dialog.accept()
-            self._sync_with_bound_account(password)
-        
-        confirm_btn = PrimaryPushButton("确认")
-        confirm_btn.clicked.connect(on_confirm)
-        cancel_btn = PushButton("取消")
-        cancel_btn.clicked.connect(password_dialog.reject)
-        
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(confirm_btn)
-        button_layout.addWidget(cancel_btn)
-        password_dialog.vBoxLayout.addLayout(button_layout)
-        
-        password_input.returnPressed.connect(on_confirm)
-        password_input.setFocus()
-        
-        if password_dialog.exec() == password_dialog.DialogCode.Accepted:
-            pass
-
-    def _sync_with_bound_account(self, cas_password: str) -> None:
-        """使用已绑定账户同步"""
-        # 显示加载提示
-        InfoBar.info("提示", "正在同步课程和作业，请稍候...", duration=3000, parent=self)
-        
-        def sync_func():
-            try:
-                return self.assignment_service.sync_all(
-                    cas_password=cas_password
-                )
-            except Exception as e:
-                self.assignment_service.load_failed.emit(str(e))
-                raise
-
-        def on_success(result: tuple[str, dict]):
-            msg, stats = result
-            # 从统计信息中提取作业数量用于显示
-            assignment_stats = stats.get("assignments", {})
-            new_count = assignment_stats.get("new_added", 0)
-            total = assignment_stats.get("total_fetched", 0)
-            self._on_sync_success(msg, new_count, total)
-            # 注意：课程墙的刷新已经在 _on_sync_success 中处理了
-
-        self.async_service.execute_async(
-            sync_func, on_success, self._on_sync_failed
-        )
-
-    def _on_sync_confirm(self, username: str, password: str) -> None:
-        """确认同步"""
-        # 显示加载提示
-        InfoBar.info("提示", "正在同步课程和作业，请稍候...", duration=3000, parent=self)
-        
-        def sync_func():
-            try:
-                return self.assignment_service.sync_all(
-                    username, password
-                )
-            except Exception as e:
-                self.assignment_service.load_failed.emit(str(e))
-                raise
-
-        def on_success(result: tuple[str, dict]):
-            msg, stats = result
-            # 从统计信息中提取作业数量用于显示
-            assignment_stats = stats.get("assignments", {})
-            new_count = assignment_stats.get("new_added", 0)
-            total = assignment_stats.get("total_fetched", 0)
-            self._on_sync_success(msg, new_count, total)
-
-        self.async_service.execute_async(
-            sync_func, on_success, self._on_sync_failed
-        )
-
-    def _on_sync_success(self, msg: str, new_count: int, total: int) -> None:
-        """同步成功"""
-        InfoBar.success("成功", msg, duration=3000, parent=self)
-        # 刷新列表（延迟一小段时间确保后端已完成数据库更新）
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(500, self._load_assignments)
-        # 同时刷新课程墙（因为同步操作会更新课程数据）
-        QTimer.singleShot(500, self.course_wall._load_courses)
-
-    def _on_sync_failed(self, error_msg: str) -> None:
-        """同步失败"""
-        InfoBar.error("错误", error_msg, duration=2000, parent=self)
 
     def update_user_info(self, username: str) -> None:
         """

@@ -40,3 +40,4 @@ class Notification:
             result["time"] = self.time
         return result
 
+

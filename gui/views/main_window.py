@@ -23,7 +23,7 @@ class MainWindow(FluentWindow):
 
     def _setup_window(self) -> None:
         """设置窗口"""
-        self.setWindowTitle("云邮教学空间")
+        self.setWindowTitle("云邮Mini")
         self.resize(1200, 800)
         # 开启 Mica 特效 (Windows 11 有效)
         try:
