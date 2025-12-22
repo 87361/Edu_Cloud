@@ -1,7 +1,7 @@
 """
 管理员API模块，提供数据库查看和管理功能
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
@@ -12,6 +12,10 @@ import logging
 from ..common.database import SessionLocal, engine
 from ..common.auth import admin_required
 from ..user import models as user_models
+from ..course import models as course_models
+from ..assignment import models as assignment_models
+from ..discussion import models as discussion_models
+from ..notification import models as notification_models
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +124,76 @@ def get_database_stats(current_user):
                 "total_revoked": total_revoked,
                 "active_revoked": active_revoked,
                 "expired_revoked": total_revoked - active_revoked
+            }
+            
+            # 课程统计
+            total_courses = db.query(course_models.Course).count()
+            # 统计活跃课程（最近30天有更新的）
+            thirty_days_ago = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            thirty_days_ago = thirty_days_ago - timedelta(days=30)
+            active_courses = db.query(course_models.Course).filter(
+                course_models.Course.last_updated >= thirty_days_ago
+            ).count()
+            
+            stats["courses"] = {
+                "total": total_courses,
+                "active": active_courses,
+                "inactive": total_courses - active_courses
+            }
+            
+            # 作业统计
+            total_assignments = db.query(assignment_models.Assignment).count()
+            submitted_assignments = db.query(assignment_models.Assignment).filter(
+                assignment_models.Assignment.is_submitted == True
+            ).count()
+            # 今日作业（今天创建的）
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+            today_assignments = db.query(assignment_models.Assignment).filter(
+                assignment_models.Assignment.created_at >= today_start
+            ).count()
+            # 待提交作业（未提交且未过期）
+            pending_assignments = db.query(assignment_models.Assignment).filter(
+                assignment_models.Assignment.is_submitted == False,
+                assignment_models.Assignment.deadline >= datetime.now(timezone.utc)
+            ).count()
+            
+            stats["assignments"] = {
+                "total": total_assignments,
+                "submitted": submitted_assignments,
+                "pending": pending_assignments,
+                "today": today_assignments
+            }
+            
+            # 讨论统计
+            total_topics = db.query(discussion_models.DiscussionTopic).count()
+            total_posts = db.query(discussion_models.DiscussionPost).count()
+            # 最近7天的讨论
+            seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+            recent_topics = db.query(discussion_models.DiscussionTopic).filter(
+                discussion_models.DiscussionTopic.created_at >= seven_days_ago
+            ).count()
+            
+            stats["discussions"] = {
+                "total_topics": total_topics,
+                "total_posts": total_posts,
+                "recent_topics": recent_topics
+            }
+            
+            # 通知统计
+            total_notifications = db.query(notification_models.Notification).count()
+            unread_notifications = db.query(notification_models.Notification).filter(
+                notification_models.Notification.is_read == False
+            ).count()
+            # 今日通知
+            today_notifications = db.query(notification_models.Notification).filter(
+                notification_models.Notification.created_at >= today_start
+            ).count()
+            
+            stats["notifications"] = {
+                "total": total_notifications,
+                "unread": unread_notifications,
+                "read": total_notifications - unread_notifications,
+                "today": today_notifications
             }
             
             # 数据库大小（SQLite）
