@@ -102,6 +102,40 @@ class APIClient:
     
     # ==================== 用户相关API ====================
     
+    def register(
+        self, 
+        username: str, 
+        password: str, 
+        email: Optional[str] = None, 
+        full_name: Optional[str] = None,
+        role: str = "user"
+    ) -> Dict[str, Any]:
+        """
+        注册本地账号
+        
+        Args:
+            username: 用户名
+            password: 密码
+            email: 邮箱（可选）
+            full_name: 全名（可选）
+            role: 角色，'user' 或 'admin'，默认为 'user'
+        
+        Returns:
+            注册响应数据
+        """
+        data = {
+            "username": username,
+            "password": password
+        }
+        if email:
+            data["email"] = email
+        if full_name:
+            data["full_name"] = full_name
+        if role:
+            data["role"] = role
+        
+        return self._make_request("POST", "/api/user/register", data=data, require_auth=False)
+    
     def login(self, username: str, password: str) -> Dict[str, Any]:
         """
         本地账号登录

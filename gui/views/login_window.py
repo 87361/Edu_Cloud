@@ -20,12 +20,14 @@ from qfluentwidgets import (
     HyperlinkButton,
     InfoBar,
     FluentIcon as FIF,
+    MessageBoxBase,
+    BodyLabel,
 )
 
 from ..services.auth_service import AuthService
 # 如果有异步服务，确保导入路径正确，或者暂时注释掉相关逻辑
 from ..services.async_service import AsyncService 
-from ..api_client import APIError
+from ..api_client import api_client, APIError
 
 class LoginWindow(QWidget):
     """登录窗口"""
@@ -184,7 +186,7 @@ class LoginWindow(QWidget):
         self.login_btn.clicked.connect(self._on_login)
 
         self.switch_btn = HyperlinkButton("#", "没有账号？点击注册", self.right_panel)
-        self.switch_btn.hide()
+        self.switch_btn.clicked.connect(self._show_register_dialog)
 
         # 组装表单
         self.form_layout.addStretch(1)
@@ -264,3 +266,160 @@ class LoginWindow(QWidget):
         self.login_btn.setEnabled(True)
         self.login_btn.setText("登录")
         InfoBar.error("登录失败", str(error_msg), duration=2000, parent=self.right_panel)
+
+    def _show_register_dialog(self) -> None:
+        """显示注册对话框"""
+        dialog = RegisterDialog(self)
+        if dialog.exec():
+            # 注册成功，自动填充用户名并切换到登录模式
+            username = dialog.get_username()
+            if username:
+                self.user_input.setText(username)
+                self.local_radio.setChecked(True)
+                self.pwd_input.setFocus()
+
+
+class RegisterDialog(MessageBoxBase):
+    """注册对话框"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._username = ""
+        self._setup_ui()
+        self.widget.setMinimumWidth(400)
+        self.yesButton.setText("注册")
+        self.cancelButton.setText("取消")
+    
+    def _setup_ui(self):
+        """设置UI"""
+        # 标题
+        title_label = SubtitleLabel("注册新账号", self.widget)
+        
+        # 输入框
+        self.username_edit = LineEdit(self.widget)
+        self.username_edit.setPlaceholderText("请输入用户名")
+        self.username_edit.setClearButtonEnabled(True)
+        
+        self.email_edit = LineEdit(self.widget)
+        self.email_edit.setPlaceholderText("请输入邮箱（可选）")
+        self.email_edit.setClearButtonEnabled(True)
+        
+        self.full_name_edit = LineEdit(self.widget)
+        self.full_name_edit.setPlaceholderText("请输入全名（可选）")
+        self.full_name_edit.setClearButtonEnabled(True)
+        
+        self.password_edit = LineEdit(self.widget)
+        self.password_edit.setPlaceholderText("请输入密码（至少6位）")
+        self.password_edit.setEchoMode(LineEdit.EchoMode.Password)
+        self.password_edit.setClearButtonEnabled(True)
+        
+        self.password_confirm_edit = LineEdit(self.widget)
+        self.password_confirm_edit.setPlaceholderText("请再次输入密码")
+        self.password_confirm_edit.setEchoMode(LineEdit.EchoMode.Password)
+        self.password_confirm_edit.setClearButtonEnabled(True)
+        
+        # 管理员选项
+        self.admin_checkbox = CheckBox("注册为管理员", self.widget)
+        self.admin_checkbox.setToolTip("勾选此项将创建管理员账号，拥有系统管理权限")
+        
+        # 状态标签
+        self.status_label = BodyLabel("", self.widget)
+        self.status_label.setStyleSheet("color: red;")
+        
+        # 组装布局
+        self.viewLayout.addWidget(title_label)
+        self.viewLayout.addSpacing(15)
+        self.viewLayout.addWidget(self.username_edit)
+        self.viewLayout.addWidget(self.email_edit)
+        self.viewLayout.addWidget(self.full_name_edit)
+        self.viewLayout.addWidget(self.password_edit)
+        self.viewLayout.addWidget(self.password_confirm_edit)
+        self.viewLayout.addSpacing(10)
+        self.viewLayout.addWidget(self.admin_checkbox)
+        self.viewLayout.addWidget(self.status_label)
+        self.viewLayout.addSpacing(10)
+        
+        # 绑定信号
+        self.yesButton.clicked.connect(self._on_register)
+        self.username_edit.returnPressed.connect(self.email_edit.setFocus)
+        self.email_edit.returnPressed.connect(self.full_name_edit.setFocus)
+        self.full_name_edit.returnPressed.connect(self.password_edit.setFocus)
+        self.password_edit.returnPressed.connect(self.password_confirm_edit.setFocus)
+        self.password_confirm_edit.returnPressed.connect(self._on_register)
+        
+        # 自动聚焦
+        self.username_edit.setFocus()
+    
+    def _on_register(self):
+        """处理注册逻辑"""
+        username = self.username_edit.text().strip()
+        email = self.email_edit.text().strip()
+        full_name = self.full_name_edit.text().strip()
+        password = self.password_edit.text()
+        password_confirm = self.password_confirm_edit.text()
+        is_admin = self.admin_checkbox.isChecked()
+        
+        # 验证输入
+        if not username:
+            self.status_label.setText("请输入用户名")
+            self.username_edit.setFocus()
+            return
+        
+        if not password:
+            self.status_label.setText("请输入密码")
+            self.password_edit.setFocus()
+            return
+        
+        if len(password) < 6:
+            self.status_label.setText("密码长度至少为6位")
+            self.password_edit.setFocus()
+            return
+        
+        if password != password_confirm:
+            self.status_label.setText("两次输入的密码不一致")
+            self.password_confirm_edit.setFocus()
+            return
+        
+        # 禁用按钮
+        self.yesButton.setEnabled(False)
+        self.yesButton.setText("注册中...")
+        self.status_label.setText("")
+        
+        # 在后台线程中执行注册
+        def do_register():
+            try:
+                role = "admin" if is_admin else "user"
+                response = api_client.register(
+                    username=username,
+                    password=password,
+                    email=email if email else None,
+                    full_name=full_name if full_name else None,
+                    role=role
+                )
+                # 注册成功，在主线程中更新UI
+                self._username = username
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, lambda: self.accept())
+            except APIError as e:
+                error_msg = e.message
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, lambda msg=error_msg: self._on_register_error(msg))
+            except Exception as e:
+                error_msg = str(e)
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(0, lambda msg=error_msg: self._on_register_error(msg))
+        
+        from PyQt6.QtCore import QThread
+        import threading
+        thread = threading.Thread(target=do_register, daemon=True)
+        thread.start()
+    
+    def _on_register_error(self, error_msg: str):
+        """注册失败"""
+        self.status_label.setText(f"注册失败: {error_msg}")
+        self.yesButton.setEnabled(True)
+        self.yesButton.setText("注册")
+    
+    def get_username(self) -> str:
+        """获取注册的用户名"""
+        return self._username

@@ -90,13 +90,19 @@ def register():
                 if db_email:
                     return error_response("Email already registered")
             
+            # 验证role字段（只能是'user'或'admin'）
+            role = user_data.role if hasattr(user_data, 'role') and user_data.role else 'user'
+            if role not in ['user', 'admin']:
+                return error_response("Invalid role. Role must be 'user' or 'admin'")
+            
             # 创建新用户
             hashed_password = get_password_hash(user_data.password)
             db_user = models.User(
                 username=user_data.username,
                 email=user_data.email,
                 full_name=user_data.full_name,
-                hashed_password=hashed_password
+                hashed_password=hashed_password,
+                role=role
             )
             db.add(db_user)
             db.commit()

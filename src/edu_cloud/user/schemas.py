@@ -7,6 +7,7 @@ class UserCreate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     password: str
+    role: Optional[str] = "user"  # 角色：'user' 或 'admin'，默认为 'user'
 
 class UserLogin(BaseModel):
     username: str
