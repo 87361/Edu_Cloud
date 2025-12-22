@@ -85,6 +85,10 @@ class DashboardInterface(QWidget):
         self.async_service = AsyncService()
         self._setup_ui()
         self._load_stats()
+    
+    def refresh_stats(self) -> None:
+        """刷新统计信息（公共方法，供外部调用）"""
+        self._load_stats()
 
     def _setup_ui(self) -> None:
         """设置UI"""

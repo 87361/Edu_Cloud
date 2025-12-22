@@ -83,6 +83,8 @@ class AdminWindow(FluentWindow):
     def _connect_signals(self) -> None:
         """连接信号"""
         self.auth_service.logout_success.connect(self._on_logout_success)
+        # 连接用户管理界面的数据刷新信号到仪表盘的刷新方法
+        self.user_interface.data_refreshed.connect(self.dashboard.refresh_stats)
 
     def _on_logout_clicked(self) -> None:
         """登出按钮点击"""

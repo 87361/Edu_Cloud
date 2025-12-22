@@ -7,10 +7,13 @@ from flask_jwt_extended import (
 )
 from sqlalchemy.orm import Session
 from werkzeug.exceptions import HTTPException
+import logging
 
 from .config import settings
 from .database import get_db, SessionLocal
 from ..user.models import User
+
+logger = logging.getLogger(__name__)
 
 class FlaskAuthError(HTTPException):
     """Flask版本的自定义认证错误"""
@@ -120,7 +123,8 @@ def admin_required(f):
         try:
             user = db.query(User).filter(User.username == current_username).first()
             if not user:
-                return jsonify({"error": "User not found"}), 404
+                logger.warning(f"Admin required: User '{current_username}' not found in database")
+                return jsonify({"error": "User not found", "message": f"User '{current_username}' not found"}), 404
             
             if not user.is_active:
                 return jsonify({"error": "Inactive user"}), 400

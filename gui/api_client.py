@@ -560,6 +560,19 @@ class APIClient:
         # GET请求使用params参数（query string），不是data（body）
         response = self._make_request("GET", f"/api/admin/database/table/{table_name}", data=params)
         return response.get("data", {})
+    
+    def delete_admin_user(self, user_id: int) -> Dict[str, Any]:
+        """
+        删除用户（管理员）
+        
+        Args:
+            user_id: 用户ID
+        
+        Returns:
+            删除结果
+        """
+        response = self._make_request("DELETE", f"/api/admin/users/{user_id}")
+        return response.get("data", {})
 
 # 全局API客户端实例
 api_client = APIClient()

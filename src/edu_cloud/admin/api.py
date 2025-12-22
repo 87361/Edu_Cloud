@@ -444,6 +444,109 @@ def get_token_blacklist(current_user):
         return error_response(f"Failed to get token blacklist: {str(e)}", 500)
 
 
+@admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@admin_required
+def delete_user(current_user, user_id: int):
+    """
+    删除用户（管理员专用）
+    需要管理员权限
+    
+    注意：
+    - 不能删除自己
+    - 会级联删除该用户的所有关联数据（作业、课程、通知等）
+    """
+    logger.info(f"删除用户请求: 管理员={current_user.username}, 目标用户ID={user_id}")
+    try:
+        db = SessionLocal()
+        try:
+            # 检查不能删除自己
+            if current_user.id == user_id:
+                logger.warning(f"管理员 {current_user.username} 尝试删除自己的账号")
+                return error_response("不能删除自己的账号", 400)
+            
+            # 查找要删除的用户
+            user = db.query(user_models.User).filter(user_models.User.id == user_id).first()
+            if not user:
+                logger.warning(f"用户ID {user_id} 不存在")
+                return error_response(f"用户ID {user_id} 不存在", 404)
+            
+            # 统计关联数据数量（用于返回信息）
+            assignment_count = db.query(assignment_models.Assignment).filter(
+                assignment_models.Assignment.owner_id == user_id
+            ).count()
+            
+            course_count = db.query(course_models.Course).filter(
+                course_models.Course.owner_id == user_id
+            ).count()
+            
+            notification_count = db.query(notification_models.Notification).filter(
+                notification_models.Notification.owner_id == user_id
+            ).count()
+            
+            token_count = db.query(user_models.TokenBlacklist).filter(
+                user_models.TokenBlacklist.username == user.username
+            ).count()
+            
+            # 删除关联数据（按顺序删除，避免外键约束问题）
+            # 1. 删除课程资源（如果存在）
+            from ..course.models import CourseResource
+            courses = db.query(course_models.Course).filter(
+                course_models.Course.owner_id == user_id
+            ).all()
+            for course in courses:
+                db.query(CourseResource).filter(
+                    CourseResource.course_id == course.id
+                ).delete()
+            
+            # 2. 删除课程
+            db.query(course_models.Course).filter(
+                course_models.Course.owner_id == user_id
+            ).delete()
+            
+            # 3. 删除作业
+            db.query(assignment_models.Assignment).filter(
+                assignment_models.Assignment.owner_id == user_id
+            ).delete()
+            
+            # 4. 删除通知
+            db.query(notification_models.Notification).filter(
+                notification_models.Notification.owner_id == user_id
+            ).delete()
+            
+            # 5. 删除Token黑名单记录
+            db.query(user_models.TokenBlacklist).filter(
+                user_models.TokenBlacklist.username == user.username
+            ).delete()
+            
+            # 6. 最后删除用户本身
+            username = user.username
+            db.delete(user)
+            db.commit()
+            
+            logger.info(f"管理员 {current_user.username} 删除了用户 {username} (ID: {user_id})")
+            
+            return jsonify(success_response({
+                "message": f"用户 {username} 已成功删除",
+                "deleted_data": {
+                    "assignments": assignment_count,
+                    "courses": course_count,
+                    "notifications": notification_count,
+                    "tokens": token_count
+                }
+            }))
+            
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"删除用户时数据库错误: {str(e)}")
+            return error_response(f"删除用户失败: {str(e)}", 500)
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"删除用户错误: {str(e)}")
+        return error_response(f"删除用户失败: {str(e)}", 500)
+
+
 @admin_bp.route("/health", methods=["GET"])
 @admin_required
 def admin_health_check(current_user):
