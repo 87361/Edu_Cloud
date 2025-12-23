@@ -248,6 +248,23 @@ edu_cloud/
    - Web界面: http://localhost:8080 (如果启动)
    - GUI应用: 运行启动脚本后自动打开窗口
 
+7. **局域网远程访问（可选）**
+   
+   如果您想让同一局域网内的其他电脑访问后端服务：
+   
+   **快速配置（推荐）：**
+   ```bash
+   # 在客户端电脑上运行配置工具
+   python configure_lan_access.py
+   # 或直接指定服务器IP
+   python configure_lan_access.py <服务器IP> [端口]
+   ```
+   
+   **手动配置：**
+   - 服务器端：确保后端监听 `0.0.0.0`（默认已配置）
+   - 客户端：修改 `~/.edu_cloud_gui/config.json` 中的 `api_base_url`
+   - 详细说明请参考 [LAN_ACCESS_GUIDE.md](LAN_ACCESS_GUIDE.md)
+
 ## 📖 API文档
 
 ### 用户API端点
