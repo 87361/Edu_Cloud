@@ -21,12 +21,12 @@ class AssignmentScraper:
         self.user_id = None
 
     def _login(self):
-        """初始化 buptmw 并获取 Ucloud Session"""
+        """初始化 buptmw 并获取 UCloud Session"""
         try:
             # 1. 初始化认证
             auth = BUPT_Auth(cas={"username": self.username, "password": self.password})
             # 2. 获取 Session (buptmw 自动处理 OAuth 换 Token)
-            self.session = auth.get_Ucloud()
+            self.session = auth.get_UCloud()
             
             # 3. 提取身份标识 (UserId)
             self.user_id = self.session.cookies.get("iClass-uuid") or \

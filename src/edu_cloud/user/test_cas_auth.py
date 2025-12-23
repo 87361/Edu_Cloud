@@ -99,12 +99,12 @@ def test_cas_authentication():
         print(f"✗ 密码加密测试出错: {str(e)}")
         return False
     
-    # 测试获取 Ucloud session（可选）
-    print("\n[4/4] 测试获取 Ucloud Session...")
+    # 测试获取 UCloud session（可选）
+    print("\n[4/4] 测试获取 UCloud Session...")
     try:
         if auth_object:
-            ucloud = auth_object.get_Ucloud()
-            print("✓ Ucloud Session 获取成功")
+            ucloud = auth_object.get_UCloud()
+            print("✓ UCloud Session 获取成功")
             
             # 尝试访问一个简单的接口
             try:
@@ -116,10 +116,10 @@ def test_cas_authentication():
             except Exception as e:
                 print(f"⚠ 接口访问测试失败（可能是网络问题）: {str(e)}")
         else:
-            print("⚠ 跳过 Ucloud Session 测试（auth_object 不可用）")
+            print("⚠ 跳过 UCloud Session 测试（auth_object 不可用）")
             
     except Exception as e:
-        print(f"⚠ Ucloud Session 测试出错: {str(e)}")
+        print(f"⚠ UCloud Session 测试出错: {str(e)}")
         # 这不算失败，因为可能只是网络问题
     
     print("\n" + "=" * 60)

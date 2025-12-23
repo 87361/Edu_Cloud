@@ -19,7 +19,7 @@ class CourseScraper:
         """初始化 buptmw (复用 assignment 的成功逻辑)"""
         try:
             auth = BUPT_Auth(cas={"username": self.username, "password": self.password})
-            self.session = auth.get_Ucloud()
+            self.session = auth.get_UCloud()
             
             # 尝试多种方式获取 ID
             self.user_id = self.session.cookies.get("iClass-uuid") or \

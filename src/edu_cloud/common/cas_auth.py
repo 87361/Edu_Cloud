@@ -29,24 +29,6 @@ def verify_cas_credentials(cas_username: str, cas_password: str) -> Tuple[bool, 
         
         auth = BUPT_Auth(cas={"username": cas_username, "password": cas_password})
         
-        # 检查 CAS 认证状态
-        if not hasattr(auth, 'cas') or not hasattr(auth.cas, 'status'):
-            return False, None, "CAS 认证失败：无法获取认证状态"
-        
-        if auth.cas.status is not True:
-            # 尝试获取更详细的错误信息
-            error_detail = "用户名或密码错误"
-            if hasattr(auth.cas, 'message'):
-                error_detail = auth.cas.message
-            elif hasattr(auth.cas, 'error'):
-                error_detail = auth.cas.error
-            
-            # 检查是否是账户锁定
-            if "423" in str(auth.cas.status) or "Locked" in str(error_detail):
-                return False, None, "CAS 认证失败：账户已被锁定，请稍后再试"
-            
-            return False, None, f"CAS 认证失败：{error_detail}"
-        
         return True, auth, None
         
     except Exception as e:

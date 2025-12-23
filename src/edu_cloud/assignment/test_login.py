@@ -16,11 +16,11 @@ try:
         "password": PASSWORD
     }
     user = BUPT_Auth(cas=auth)
-    print("2. 初始化成功，正在尝试连接 Ucloud...")
+    print("2. 初始化成功，正在尝试连接 UCloud...")
     
     # 这一步是真正发起网络请求的地方
-    ucloud = user.get_Ucloud()
-    print("3. Ucloud 登录成功！Session 对象:", ucloud)
+    ucloud = user.get_UCloud()
+    print("3. UCloud 登录成功！Session 对象:", ucloud)
     
     # 试着访问一下
     resp = ucloud.get("https://ucloud.bupt.edu.cn/ykt-site/site/user/current")

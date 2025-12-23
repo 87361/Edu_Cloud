@@ -45,18 +45,18 @@ def test_direct():
             if auth.cas.status is True:
                 print("\n✓ CAS 认证成功！")
                 
-                # 尝试获取 Ucloud
-                print("\n尝试获取 Ucloud Session...")
+                # 尝试获取 UCloud
+                print("\n尝试获取 UCloud Session...")
                 try:
-                    ucloud = auth.get_Ucloud()
-                    print("✓ Ucloud Session 获取成功")
+                    ucloud = auth.get_UCloud()
+                    print("✓ UCloud Session 获取成功")
                     
                     # 测试访问
                     resp = ucloud.get("https://ucloud.bupt.edu.cn/ykt-site/site/user/current", timeout=10)
                     print(f"✓ 测试接口访问成功，状态码: {resp.status_code}")
                     
                 except Exception as e:
-                    print(f"✗ Ucloud Session 获取失败: {e}")
+                    print(f"✗ UCloud Session 获取失败: {e}")
             else:
                 print(f"\n✗ CAS 认证失败")
                 print(f"  状态: {auth.cas.status}")

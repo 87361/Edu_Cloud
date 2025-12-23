@@ -18,7 +18,7 @@ class DiscussionScraper:
         """复用认证逻辑"""
         try:
             auth = BUPT_Auth(cas={"username": self.username, "password": self.password})
-            self.session = auth.get_Ucloud()
+            self.session = auth.get_UCloud()
             self.user_id = self.session.cookies.get("iClass-uuid") or \
                            self.session.cookies.get("userId") or \
                            getattr(self.session, "user_id", None)
